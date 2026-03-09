@@ -113,8 +113,10 @@ const Skills = () => {
     }
   }, [user]);
 
-  const toggleSkill = (s: string) =>
+  const toggleSkill = (s: string) => {
     setSelected(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+    setShowAll(false);
+  };
 
   const userSkillSet = useMemo(() => new Set(user?.skills || []), [user]);
 
@@ -131,12 +133,26 @@ const Skills = () => {
   );
 
   const filtered = useMemo(() => enriched.filter(ev => {
-    const needed  = ev.required_skills || [];
-    const sq      = search.toLowerCase();
-    if (sq && !ev.title.toLowerCase().includes(sq) && !ev.category.toLowerCase().includes(sq)) return false;
+    const needed = ev.required_skills || [];
+    const sq     = search.toLowerCase();
+
+    // Metin araması
+    if (sq &&
+      !ev.title.toLowerCase().includes(sq) &&
+      !ev.category.toLowerCase().includes(sq) &&
+      !(ev.short_description || '').toLowerCase().includes(sq)
+    ) return false;
+
+    // Yetenek filtresi seçili değilse hepsini göster
     if (!selected.length) return true;
+
+    // Skill zorunluluğu olmayan etkinlikler her zaman dahil
+    if (!needed.length) return true;
+
     const matches = selected.filter(s => needed.includes(s));
-    return matchMode === 'any' ? matches.length > 0 || !needed.length : matches.length === selected.length;
+    return matchMode === 'any'
+      ? matches.length > 0
+      : matches.length === selected.length;
   }), [enriched, search, selected, matchMode]);
 
   // En iyi 3 AI önerisi
@@ -353,20 +369,21 @@ const Skills = () => {
               <TrendingUp size={16} className="text-primary" />
               Yetenek Filtresi
             </h2>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-text-muted">Eşleşme modu:</span>
-              {(['any', 'all'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => setMatchMode(m)}
-                  className={cn(
-                    'px-2.5 py-1 rounded-lg font-semibold transition-all',
-                    matchMode === m ? 'bg-primary text-white' : 'bg-earth-lighter text-text-soft hover:bg-earth-light'
-                  )}
-                >
-                  {m === 'any' ? 'Herhangi biri' : 'Tümü'}
-                </button>
-              ))}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-text-muted hidden sm:inline">Eşleşme:</span>
+                {(['any', 'all'] as const).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => { setMatchMode(m); setShowAll(false); }}
+                    className={cn(
+                      'px-2.5 py-1 rounded-lg font-semibold transition-all',
+                      matchMode === m ? 'bg-primary text-white' : 'bg-earth-lighter text-text-soft hover:bg-earth-light'
+                    )}
+                    title={m === 'any' ? 'Seçili yeteneklerden en az biri eşleşsin' : 'Seçili yeteneklerin tümü eşleşsin'}
+                  >
+                    {m === 'any' ? 'En az biri' : 'Tümü'}
+                  </button>
+                ))}
             </div>
           </div>
 
