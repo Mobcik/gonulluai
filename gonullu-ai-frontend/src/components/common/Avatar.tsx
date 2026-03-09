@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { cn } from '../../utils/cn';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 
 interface AvatarProps {
   src?:     string;
@@ -22,6 +24,8 @@ const getColor = (name: string) =>
   COLORS[name.charCodeAt(0) % COLORS.length];
 
 const Avatar = ({ src, name, size = 'md', className }: AvatarProps) => {
+  const [imgError, setImgError] = useState(false);
+
   const sizes = {
     xs: 'w-6 h-6 text-xs',
     sm: 'w-8 h-8 text-xs',
@@ -30,11 +34,14 @@ const Avatar = ({ src, name, size = 'md', className }: AvatarProps) => {
     xl: 'w-20 h-20 text-2xl',
   };
 
-  if (src) {
+  const resolvedSrc = resolveMediaUrl(src);
+
+  if (resolvedSrc && !imgError) {
     return (
       <img
-        src={src}
+        src={resolvedSrc}
         alt={name}
+        onError={() => setImgError(true)}
         className={cn('rounded-full object-cover flex-shrink-0', sizes[size], className)}
       />
     );

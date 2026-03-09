@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Leaf, Plus, LogOut, User, Trophy, LayoutDashboard, Settings } from 'lucide-react';
+import { Menu, X, Plus, LogOut, User, Trophy, LayoutDashboard, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './common/Avatar';
 import NotificationPanel from './NotificationPanel';
@@ -29,14 +29,15 @@ const Navbar = () => {
     ? [
         { to: '/dashboard',   label: 'Ana Sayfa' },
         { to: '/discover',    label: 'Keşfet' },
+        { to: '/clubs',       label: 'Topluluklar' },
         { to: '/calendar',    label: 'Takvim' },
         { to: '/leaderboard', label: 'Sıralama' },
       ]
     : [
         { to: '/discover',    label: 'Keşfet' },
+        { to: '/clubs',       label: 'Topluluklar' },
         { to: '/skills',      label: 'Yetenekler' },
         { to: '/leaderboard', label: 'Sıralama' },
-        { to: '/impact',      label: 'Etki' },
       ];
 
   return (
@@ -48,9 +49,11 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-green group-hover:scale-110 transition-transform">
-              <Leaf size={16} className="text-white" />
-            </div>
+            <img
+              src="/logo.svg"
+              alt="GönüllüAI logo"
+              className="w-9 h-9 group-hover:scale-110 transition-transform drop-shadow-sm"
+            />
             <span className="font-display font-bold text-xl text-text">Gönüllü<span className="text-primary">AI</span></span>
           </Link>
 
@@ -94,7 +97,7 @@ const Navbar = () => {
                     <Avatar src={user.avatar_url} name={user.full_name} size="sm" />
                     <div className="text-left">
                       <p className="text-xs font-semibold text-text leading-none">{user.full_name.split(' ')[0]}</p>
-                      <p className="text-xs text-text-muted leading-none mt-0.5">{badgeInfo[user.badge].emoji} {user.total_points} puan</p>
+                      <p className="text-xs text-text-muted leading-none mt-0.5">{badgeInfo[user.badge]?.emoji ?? '🌱'} {user.total_points} puan</p>
                     </div>
                   </button>
 
