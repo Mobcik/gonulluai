@@ -4,6 +4,7 @@ import { Calendar, MapPin, Users, CheckCircle } from 'lucide-react';
 import type { Event } from '../../types';
 import { categoryEmoji } from '../../utils/formatPoints';
 import { formatEventDate, daysUntilEvent } from '../../utils/formatDate';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { cn } from '../../utils/cn';
 import Avatar from '../common/Avatar';
 
@@ -51,13 +52,14 @@ const statusLabel: Record<string, { label: string; color: string }> = {
 };
 
 const EventCard = ({ event, aiScore, aiReason, className, style }: EventCardProps) => {
-  const pct      = fillPercent(event.participant_count, event.max_participants);
-  const daysLeft = daysUntilEvent(event.event_date);
+  const pct      = fillPercent(event.participant_count ?? 0, event.max_participants);
+  const daysLeft = event.event_date ? daysUntilEvent(event.event_date) : -1;
   const status   = statusLabel[event.status] ?? statusLabel.active;
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
-  const showImage = event.cover_photo_url && !imgError;
+  const coverSrc  = resolveMediaUrl(event.cover_photo_url);
+  const showImage = !!coverSrc && !imgError;
 
   return (
     <Link to={`/events/${event.id}`} className={cn('block group', className)} style={style}>
@@ -80,7 +82,7 @@ const EventCard = ({ event, aiScore, aiReason, className, style }: EventCardProp
           {/* Gerçek fotoğraf */}
           {showImage && (
             <img
-              src={event.cover_photo_url!}
+              src={coverSrc}
               alt={event.title}
               className={cn(
                 'absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-all duration-500',
@@ -172,10 +174,14 @@ const EventCard = ({ event, aiScore, aiReason, className, style }: EventCardProp
 
           {/* Creator + joined */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Avatar src={event.creator.avatar_url} name={event.creator.full_name} size="xs" />
-              <span className="text-xs text-text-muted">{event.creator.full_name}</span>
-            </div>
+            {event.creator ? (
+              <div className="flex items-center gap-1.5">
+                <Avatar src={event.creator.avatar_url} name={event.creator.full_name || '?'} size="xs" />
+                <span className="text-xs text-text-muted">{event.creator.full_name}</span>
+              </div>
+            ) : (
+              <span className="text-xs text-text-muted">Gönüllü etkinliği</span>
+            )}
             {event.is_joined && (
               <span className="text-xs text-primary font-semibold flex items-center gap-0.5">
                 <CheckCircle size={12} /> Katıldın

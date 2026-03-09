@@ -22,6 +22,7 @@ import Skills          from './pages/Skills';
 import Impact          from './pages/Impact';
 import ClubsList       from './pages/ClubsList';
 import ClubDetail      from './pages/ClubDetail';
+import ClubCreate      from './pages/ClubCreate';
 
 // Giriş yapmış kullanıcıyı dashboard'a yönlendir
 const HomeRoute = () => {
@@ -71,6 +72,7 @@ const App = () => {
           <Route path="/skills"                      element={<Skills />} />
           <Route path="/impact"                      element={<Impact />} />
           <Route path="/clubs"                       element={<ClubsList />} />
+          <Route path="/clubs/new"                   element={<ClubCreate />} />
           <Route path="/clubs/:id"                   element={<ClubDetail />} />
         </Routes>
         </ErrorBoundary>
