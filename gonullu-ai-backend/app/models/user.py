@@ -1,11 +1,7 @@
 from sqlalchemy import Column, String, Boolean, Integer, Text, TIMESTAMP
 from sqlalchemy.sql import func
-from uuid import uuid4
 from app.database import Base
-
-
-def new_uuid():
-    return str(uuid4())
+from app.utils import new_uuid
 
 
 class User(Base):

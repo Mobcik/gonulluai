@@ -35,6 +35,7 @@ const Dashboard = () => {
   const [recentPoints, setRecentPoints]       = useState<PointTransaction[]>([]);
   const [stats, setStats]                     = useState({ joined: 0, created: 0 });
   const [loading, setLoading]                 = useState(true);
+  const [aiWelcome, setAiWelcome]             = useState('');
 
   useEffect(() => {
     if (authLoading) return;
@@ -74,6 +75,11 @@ const Dashboard = () => {
       if (pointsRes.status === 'fulfilled') {
         setRecentPoints((pointsRes.value.data as any[]).slice(0, 5));
       }
+
+      // AI karşılama mesajını arka planda yükle (opsiyonel)
+      api.get<{ message: string }>('/events/ai-welcome')
+        .then(r => { if (r.data?.message) setAiWelcome(r.data.message); })
+        .catch(() => {});
     } catch {
       // fail silently
     }
@@ -101,6 +107,12 @@ const Dashboard = () => {
               <h1 className="font-display text-2xl sm:text-3xl font-bold mt-0.5">
                 {user.full_name.split(' ')[0]} 👋
               </h1>
+              {aiWelcome && (
+                <p className="flex items-center gap-1.5 text-white/90 text-sm mt-2 max-w-sm">
+                  <Sparkles size={13} className="flex-shrink-0 opacity-80" />
+                  {aiWelcome}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-3 mt-3">
                 <span className="flex items-center gap-1.5 bg-white/20 rounded-chip px-3 py-1 text-sm font-semibold">
                   <Star size={14} /> {formatPoints(user.total_points)} puan

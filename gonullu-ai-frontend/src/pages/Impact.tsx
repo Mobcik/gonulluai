@@ -66,7 +66,8 @@ const Impact = () => {
   const cardRef                       = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const req = [api.get<PlatformImpact>('/analytics/impact')];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const req: Promise<any>[] = [api.get<PlatformImpact>('/analytics/impact')];
     if (user) req.push(api.get<UserImpact>(`/analytics/impact/user/${user.id}`));
 
     Promise.allSettled(req).then(([pRes, uRes]) => {
@@ -156,14 +157,14 @@ const Impact = () => {
         )}
 
         {/* ── KATEGORİ DAĞILIMI ───────────────────────────── */}
-        {platform?.category_breakdown.length > 0 && (
+        {(platform?.category_breakdown?.length ?? 0) > 0 && (
           <div className="bg-white rounded-2xl p-6 shadow-card">
             <h2 className="font-semibold text-text mb-5 flex items-center gap-2">
               <TrendingUp size={16} className="text-primary" /> Kategori Dağılımı
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {platform.category_breakdown
-                .sort((a, b) => b.count - a.count)
+              {platform?.category_breakdown
+                ?.sort((a, b) => b.count - a.count)
                 .map(cat => (
                   <Link
                     key={cat.category}

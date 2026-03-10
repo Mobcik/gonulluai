@@ -37,6 +37,7 @@ const EventDetail = () => {
   const [rating,        setRating]         = useState(0);
   const [lightbox,      setLightbox]       = useState<number | null>(null);
   const [uploading,     setUploading]      = useState(false);
+  const [completing,    setCompleting]     = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -59,7 +60,7 @@ const EventDetail = () => {
       } else {
         await eventsApi.join(id!);
         setEvent(prev => prev ? { ...prev, is_joined: true, participant_count: prev.participant_count + 1 } : prev);
-        toast.success('+20 puan kazandın! 🎉');
+        toast.success('Etkinliğe kayıt oldun! Katılımını doğrulayarak 35 puan kazan. 🎯');
       }
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'İşlem başarısız');
@@ -79,6 +80,20 @@ const EventDetail = () => {
       toast.error(err.response?.data?.detail || 'Geçersiz kod');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!window.confirm('Etkinliği tamamlandı olarak işaretlemek istiyor musun? Doğrulanmış katılımcılara +25 bonus puan verilecek.')) return;
+    setCompleting(true);
+    try {
+      const { data } = await eventsApi.complete(id!);
+      setEvent(prev => prev ? { ...prev, status: 'completed' } : prev);
+      toast.success(`Etkinlik tamamlandı! ${data.verified_count} katılımcıya bonus puan verildi 🏁`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'İşlem başarısız');
+    } finally {
+      setCompleting(false);
     }
   };
 
@@ -325,7 +340,7 @@ const EventDetail = () => {
                 {verified ? (
                   <div className="text-center py-4">
                     <div className="text-4xl mb-2 animate-confetti">🎉</div>
-                    <p className="font-semibold text-primary">Katılımın doğrulandı! +15 puan kazandın!</p>
+                    <p className="font-semibold text-primary">Katılımın doğrulandı! +35 puan kazandın! ✅</p>
                   </div>
                 ) : (
                   <div>
@@ -366,9 +381,16 @@ const EventDetail = () => {
                     <Copy size={15} />
                     Doğrulama Kodunu Göster
                   </button>
-                  <button className="flex items-center gap-2 p-3 bg-earth-lighter rounded-xl text-earth text-sm font-medium hover:bg-earth hover:text-white transition-colors">
-                    <CheckCircle size={15} />
-                    Tamamlandı İşaretle
+                  <button
+                    onClick={handleComplete}
+                    disabled={completing || event.status === 'completed'}
+                    className="flex items-center gap-2 p-3 bg-earth-lighter rounded-xl text-earth text-sm font-medium hover:bg-earth hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {completing
+                      ? <Loader2 size={15} className="animate-spin" />
+                      : <CheckCircle size={15} />
+                    }
+                    {event.status === 'completed' ? 'Tamamlandı ✓' : 'Tamamlandı İşaretle'}
                   </button>
                   <Link
                     to={`/events/${event.id}/analytics`}
@@ -554,7 +576,7 @@ const EventDetail = () => {
                     className="w-full"
                     size="lg"
                   >
-                    {event.is_joined ? '✓ Katıldın — İptal Et' : 'Katıl (+20 puan)'}
+                    {event.is_joined ? '✓ Katıldın — İptal Et' : 'Katıl'}
                   </Button>
                 )}
 
@@ -582,9 +604,10 @@ const EventDetail = () => {
                 <div className="mt-4 p-3 bg-primary-light rounded-xl">
                   <p className="text-xs font-semibold text-primary mb-1">Kazanabileceklerin:</p>
                   <div className="space-y-1 text-xs text-text-soft">
-                    <div className="flex justify-between"><span>Katılım</span><span className="font-semibold text-primary">+20 puan</span></div>
-                    <div className="flex justify-between"><span>Varlık doğrulama</span><span className="font-semibold text-primary">+15 puan</span></div>
+                    <div className="flex justify-between"><span>Katılım doğrulama</span><span className="font-semibold text-primary">+35 puan</span></div>
+                    <div className="flex justify-between"><span>Etkinlik tamamlama bonusu</span><span className="font-semibold text-primary">+25 puan</span></div>
                     <div className="flex justify-between"><span>Fotoğraf yükleme</span><span className="font-semibold text-primary">+10 puan</span></div>
+                    <div className="flex justify-between"><span>Yorum yapma</span><span className="font-semibold text-primary">+5 puan</span></div>
                   </div>
                 </div>
               </div>

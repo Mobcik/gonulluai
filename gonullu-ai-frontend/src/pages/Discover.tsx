@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState } from 'react';
 import { Search, SlidersHorizontal, Sparkles, X, MapPin, Tag } from 'lucide-react';
-import { eventsApi } from '../api/events';
-import type { Event } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { useDiscoverEvents } from '../hooks/useDiscoverEvents';
 import EventCard from '../components/events/EventCard';
 import Chip from '../components/common/Chip';
 import { categoryEmoji } from '../utils/formatPoints';
-import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../utils/cn';
 
 const CATEGORIES = [
@@ -21,65 +20,15 @@ const CITIES = [
 
 const Discover = () => {
   const { user } = useAuth();
+  const [showFilters, setShowFilters] = useState(false);
 
-  // ── Sunucu tarafı filtreler (API çağrısını tetikler) ─────────────────────
-  const [selectedCat,  setSelectedCat]  = useState('');
-  const [selectedCity, setSelectedCity] = useState('');
-  const [useAI,        setUseAI]        = useState(true);
-
-  // ── İstemci tarafı filtreler (anlık, API çağrısı gerekmez) ───────────────
-  const [search,       setSearch]       = useState('');
-
-  // ── UI durum ─────────────────────────────────────────────────────────────
-  const [showFilters, setShowFilters]   = useState(false);
-  const [events,      setEvents]        = useState<Event[]>([]);
-  const [loading,     setLoading]       = useState(true);
-  const [welcomeMsg,  setWelcomeMsg]    = useState('');
-
-  // ── API çağrısı: yalnızca kategori / şehir / AI modu değişince ──────────
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
-    try {
-      const call = useAI && user ? eventsApi.discover : eventsApi.list;
-      const { data } = await call({
-        category: selectedCat  || undefined,
-        city:     selectedCity || undefined,
-      });
-      setEvents(Array.isArray(data) ? data : []);
-      if (user && useAI && data?.length > 0) {
-        setWelcomeMsg(`Merhaba ${user.full_name.split(' ')[0]}! Sana özel ${data.length} etkinlik sıralandı.`);
-      } else {
-        setWelcomeMsg('');
-      }
-    } catch {
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [useAI, selectedCat, selectedCity, user]);
-
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
-
-  // ── Anlık metin araması (client-side, API çağrısı yok) ─────────────────
-  const displayed = useMemo(() => {
-    if (!search.trim()) return events;
-    const q = search.toLowerCase();
-    return events.filter(e =>
-      e.title.toLowerCase().includes(q) ||
-      (e.short_description || '').toLowerCase().includes(q) ||
-      e.category.toLowerCase().includes(q) ||
-      e.city.toLowerCase().includes(q)
-    );
-  }, [events, search]);
-
-  // Aktif filtre sayısı
-  const activeFilterCount = [selectedCat, selectedCity].filter(Boolean).length;
-
-  const clearAll = () => {
-    setSelectedCat('');
-    setSelectedCity('');
-    setSearch('');
-  };
+  const {
+    displayed, loading, welcomeMsg,
+    search, selectedCat, selectedCity, useAI,
+    activeFilterCount,
+    setSearch, setSelectedCat, setSelectedCity, setUseAI,
+    clearAll,
+  } = useDiscoverEvents({ user });
 
   return (
     <div className="min-h-screen pt-20 pb-16">
@@ -100,7 +49,7 @@ const Discover = () => {
               <p className="text-text-soft mt-1">
                 {loading
                   ? 'Yükleniyor…'
-                  : `${displayed.length} etkinlik${events.length !== displayed.length ? ` / ${events.length} sonuç` : ''}`
+                  : `${displayed.length} etkinlik`
                 }
                 {selectedCat  && <span className="ml-2 text-primary font-medium">· {selectedCat}</span>}
                 {selectedCity && <span className="ml-1 text-earth font-medium">· {selectedCity}</span>}
@@ -145,7 +94,6 @@ const Discover = () => {
               )}
             </div>
 
-            {/* Filtreler butonu */}
             <button
               type="button"
               onClick={() => setShowFilters(v => !v)}
@@ -165,7 +113,6 @@ const Discover = () => {
               )}
             </button>
 
-            {/* Filtreleri temizle */}
             {(activeFilterCount > 0 || search) && (
               <button
                 type="button"
@@ -178,13 +125,9 @@ const Discover = () => {
             )}
           </div>
 
-          {/* ── Kategori Chip'leri ──────────────────────────────────────────── */}
+          {/* ── Kategori Chip'leri ──────────────────────────────────────── */}
           <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scroll-smooth">
-            <Chip
-              label="Tümü"
-              active={!selectedCat}
-              onClick={() => setSelectedCat('')}
-            />
+            <Chip label="Tümü" active={!selectedCat} onClick={() => setSelectedCat('')} />
             {CATEGORIES.map(cat => (
               <Chip
                 key={cat}
@@ -195,29 +138,22 @@ const Discover = () => {
             ))}
           </div>
 
-          {/* ── Genişletilmiş Filtreler ─────────────────────────────────────── */}
+          {/* ── Şehir Filtresi ─────────────────────────────────────────── */}
           {showFilters && (
-            <div className="mt-4 p-4 bg-white/70 backdrop-blur-sm rounded-2xl border border-earth-lighter space-y-4 animate-fadeIn">
-              {/* Şehir */}
-              <div>
-                <p className="text-xs font-semibold text-text-soft uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                  <MapPin size={12} /> Şehir
-                </p>
-                <div className="flex gap-2 flex-wrap">
+            <div className="mt-4 p-4 bg-white/70 backdrop-blur-sm rounded-2xl border border-earth-lighter animate-fadeIn">
+              <p className="text-xs font-semibold text-text-soft uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <MapPin size={12} /> Şehir
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <Chip label="Tüm Şehirler" active={!selectedCity} onClick={() => setSelectedCity('')} />
+                {CITIES.map(city => (
                   <Chip
-                    label="Tüm Şehirler"
-                    active={!selectedCity}
-                    onClick={() => setSelectedCity('')}
+                    key={city}
+                    label={city}
+                    active={selectedCity === city}
+                    onClick={() => setSelectedCity(selectedCity === city ? '' : city)}
                   />
-                  {CITIES.map(city => (
-                    <Chip
-                      key={city}
-                      label={city}
-                      active={selectedCity === city}
-                      onClick={() => setSelectedCity(selectedCity === city ? '' : city)}
-                    />
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
           )}
@@ -235,7 +171,6 @@ const Discover = () => {
                   <div className="h-4 bg-earth-lighter rounded w-3/4" />
                   <div className="h-3 bg-earth-lighter rounded w-full" />
                   <div className="h-3 bg-earth-lighter rounded w-2/3" />
-                  <div className="h-2 bg-earth-lighter rounded w-full" />
                 </div>
               </div>
             ))}
@@ -245,18 +180,12 @@ const Discover = () => {
             <div className="text-5xl mb-4">🔍</div>
             <h3 className="font-semibold text-xl text-text mb-2">Etkinlik bulunamadı</h3>
             <p className="text-text-muted mb-6">
-              {search
-                ? `"${search}" için sonuç bulunamadı`
-                : 'Seçili filtrelerle eşleşen etkinlik yok'
-              }
+              {search ? `"${search}" için sonuç bulunamadı` : 'Seçili filtrelerle eşleşen etkinlik yok'}
             </p>
-            <button onClick={clearAll} className="btn-primary px-8">
-              Filtreleri Temizle
-            </button>
+            <button onClick={clearAll} className="btn-primary px-8">Filtreleri Temizle</button>
           </div>
         ) : (
           <>
-            {/* Sonuç sayısı + aktif filtre özeti */}
             {(search || activeFilterCount > 0) && (
               <div className="flex items-center gap-3 mb-5 flex-wrap">
                 <p className="text-sm text-text-muted">
@@ -265,25 +194,19 @@ const Discover = () => {
                 {search && (
                   <span className="flex items-center gap-1 text-xs bg-earth-lighter text-text px-2.5 py-1 rounded-chip">
                     <Tag size={10} /> "{search}"
-                    <button onClick={() => setSearch('')} className="ml-1 hover:text-red-500">
-                      <X size={10} />
-                    </button>
+                    <button onClick={() => setSearch('')} className="ml-1 hover:text-red-500"><X size={10} /></button>
                   </span>
                 )}
                 {selectedCat && (
                   <span className="flex items-center gap-1 text-xs bg-primary-light text-primary px-2.5 py-1 rounded-chip font-medium">
                     {categoryEmoji[selectedCat]} {selectedCat}
-                    <button onClick={() => setSelectedCat('')} className="ml-1 hover:text-red-500">
-                      <X size={10} />
-                    </button>
+                    <button onClick={() => setSelectedCat('')} className="ml-1 hover:text-red-500"><X size={10} /></button>
                   </span>
                 )}
                 {selectedCity && (
                   <span className="flex items-center gap-1 text-xs bg-earth-lighter text-earth px-2.5 py-1 rounded-chip font-medium">
                     <MapPin size={10} /> {selectedCity}
-                    <button onClick={() => setSelectedCity('')} className="ml-1 hover:text-red-500">
-                      <X size={10} />
-                    </button>
+                    <button onClick={() => setSelectedCity('')} className="ml-1 hover:text-red-500"><X size={10} /></button>
                   </span>
                 )}
               </div>

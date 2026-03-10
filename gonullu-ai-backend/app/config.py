@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASS: Optional[str] = None
 
-    FRONTEND_URL: str = "http://localhost:5174"
+    FRONTEND_URL: str = "http://localhost:5175"
     BACKEND_URL:  str = "http://localhost:8000"
 
     class Config:

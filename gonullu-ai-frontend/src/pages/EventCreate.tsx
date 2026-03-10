@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Check, Upload, X, Link as LinkIcon } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Check, Upload, X, Link as LinkIcon, Sparkles } from 'lucide-react';
 import { eventsApi, type CreateEventPayload } from '../api/events';
 import api from '../api/client';
 import type { EventCategory } from '../types';
@@ -49,10 +49,34 @@ const EventCreate = () => {
   const navigate       = useNavigate();
   const [step, setStep]       = useState(0);
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [form, setForm]       = useState<FormState>(INIT);
 
   const upd = (key: keyof FormState, value: unknown) =>
     setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleAiGenerate = async () => {
+    if (!form.title.trim() || !form.category) {
+      toast.error('Önce etkinlik adı ve kategori gir');
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const { data } = await eventsApi.generateDescription(
+        form.title,
+        form.category,
+        form.city || 'Türkiye',
+        form.short_description,
+      );
+      if (data.short_description) upd('short_description', data.short_description);
+      if (data.description) upd('description', data.description);
+      toast.success('AI açıklama oluşturdu! Düzenleyebilirsin ✨');
+    } catch {
+      toast.error('AI şu an kullanılamıyor, tekrar dene');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleCoverFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -165,7 +189,28 @@ const EventCreate = () => {
           {/* ── ADIM 0 ─ Temel Bilgiler ──────────────────────────────────── */}
           {step === 0 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-lg text-text">Temel Bilgiler</h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-lg text-text">Temel Bilgiler</h2>
+                <button
+                  type="button"
+                  onClick={handleAiGenerate}
+                  disabled={aiLoading || !form.title.trim()}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all',
+                    form.title.trim()
+                      ? 'bg-primary text-white shadow-green hover:bg-primary-dark hover:-translate-y-0.5'
+                      : 'bg-earth-lighter text-text-muted cursor-not-allowed'
+                  )}
+                  title="Etkinlik adını girerek aktif et"
+                >
+                  {aiLoading ? (
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Sparkles size={12} />
+                  )}
+                  {aiLoading ? 'AI yazıyor…' : 'AI ile Doldur'}
+                </button>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-text mb-1.5">
@@ -198,12 +243,17 @@ const EventCreate = () => {
                   Detaylı Açıklama <span className="text-text-muted text-xs">({form.description.length} karakter)</span>
                 </label>
                 <textarea
-                  rows={5}
+                  rows={6}
                   value={form.description}
                   onChange={e => upd('description', e.target.value)}
-                  placeholder="Etkinlik detaylarını, amacını ve nasıl katılabileceğini anlat..."
+                  placeholder="Etkinlik detaylarını, amacını ve nasıl katılabileceğini anlat…"
                   className="input resize-none"
                 />
+                {form.description && (
+                  <p className="text-xs text-text-muted mt-1">
+                    ✏️ AI tarafından oluşturuldu — istediğin gibi düzenleyebilirsin
+                  </p>
+                )}
               </div>
 
               <div>

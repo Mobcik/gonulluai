@@ -5,6 +5,20 @@ export type EventCategory =
   | 'Çevre' | 'Eğitim' | 'Sağlık' | 'Hayvan Hakları'
   | 'Yaşlı Bakımı' | 'Çocuk Gelişimi' | 'Teknoloji' | 'Sanat & Kültür';
 
+export type NotificationType =
+  | 'event_join'
+  | 'attendance_verified'
+  | 'event_complete'
+  | 'badge_unlocked'
+  | 'reward_unlocked'
+  | 'event_reminder'
+  | 'late_cancel'
+  | 'photo_upload'
+  | 'comment';
+
+export type VerificationMethod = 'qr' | 'code' | 'none';
+export type RewardType         = 'badge' | 'frame' | 'certificate' | 'title';
+
 export interface User {
   id:               string;
   email:            string;
@@ -44,8 +58,9 @@ export interface Event {
   cover_photo_url?:    string;
   required_skills:     string[];
   preparation_notes?:  string;
+  contact_info?:       string;
   status:              EventStatus;
-  verification_method: 'qr' | 'code' | 'none';
+  verification_method: VerificationMethod;
   is_joined?:          boolean;
   is_creator?:         boolean;
   user_verified?:      boolean;
@@ -76,7 +91,7 @@ export interface PointTransaction {
 export interface Notification {
   id:         string;
   user_id:    string;
-  type:       string;
+  type:       NotificationType;
   message:    string;
   is_read:    boolean;
   created_at: string;
@@ -95,7 +110,7 @@ export interface DigitalReward {
   description: string;
   threshold:   number;
   icon:        string;
-  type:        'badge' | 'frame' | 'certificate' | 'title';
+  type:        RewardType;
 }
 
 export interface PhotoItem {
