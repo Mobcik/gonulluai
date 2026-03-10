@@ -342,7 +342,7 @@ const Skills = () => {
                 <strong className="text-text">{filtered.length}</strong> etkinlik
               </span>
               <button
-                onClick={() => { enriched; setSearch(''); }}
+                onClick={() => setSearch('')}
                 className="text-xs text-text-muted hover:text-text underline"
               >
                 Temizle

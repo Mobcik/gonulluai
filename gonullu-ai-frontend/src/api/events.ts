@@ -82,9 +82,9 @@ export const eventsApi = {
     api.post<Comment>(`/events/${id}/comments`, { content, rating }),
 
   /** Gemini ile etkinlik kısa + detaylı açıklaması üret */
-  generateDescription: (title: string, category: string, city: string, short_desc?: string) =>
+  generateDescription: (title: string, category: string, city: string, extra_context?: string) =>
     api.post<{ short_description: string; description: string }>(
       '/events/ai-generate-description',
-      { title, category, city, short_desc },
+      { title, category, city, extra_context },
     ),
 };

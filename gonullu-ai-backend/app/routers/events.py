@@ -467,37 +467,58 @@ async def ai_generate_description(
     data: dict,
     user: User = Depends(get_current_user),
 ):
-    """Gemini ile etkinlik açıklaması üret. Gemini çalışmazsa şablon döner."""
-    title    = data.get("title", "Gönüllülük Etkinliği")
-    category = data.get("category", "Genel")
-    city     = data.get("city", "Türkiye")
-    short_desc = data.get("short_desc", "")
+    """Gemini ile etkinlik açıklaması üret. Gemini çalışmazsa başlık/kategoriye özel şablon döner."""
+    title         = data.get("title", "Gönüllülük Etkinliği")
+    category      = data.get("category", "Genel")
+    city          = data.get("city", "Türkiye")
+    extra_context = data.get("extra_context", "")   # adres, buluşma noktası, saat
 
-    result = await ai_service.generate_event_description(title, category, city, short_desc)
+    result = await ai_service.generate_event_description(title, category, city, extra_context)
 
-    # Gemini çalışmazsa anlamlı bir şablon döndür
     if not result:
-        result = {
-            "short_description": (
-                f"{city}'de düzenlenen {category.lower()} temalı bu etkinlikte "
-                f"gönüllü olarak yer al ve gerçek bir fark yarat!"
-            ),
-            "description": (
-                f"## {title}\n\n"
-                f"Bu etkinlikte birlikte anlamlı bir fark yaratacağız. "
-                f"Gönüllü olarak katıldığında hem topluma katkı sağlayacak "
-                f"hem de yeni beceriler kazanacaksın.\n\n"
-                f"**Kimler katılabilir?**\n"
-                f"Herkes katılabilir! Önceden deneyim gerekmez.\n\n"
-                f"**Neden katılmalısın?**\n"
-                f"- Gerçek bir etki yaratma fırsatı\n"
-                f"- Yeni insanlarla tanışma\n"
-                f"- {category} alanında deneyim kazanma\n"
-                f"- GönüllüAI'da puan ve rozet kazanma\n\n"
-                f"Seni {city}'de bu güzel etkinlikte görmek isteriz! 🌿"
-            ),
-        }
+        result = _build_fallback_description(title, category, city)
     return result
+
+
+def _build_fallback_description(title: str, category: str, city: str) -> dict:
+    """Gemini başarısız olduğunda başlık, kategori ve şehre özgü açıklama üretir."""
+    actions = {
+        "Çevre":         f"çevre koruma ve yeşillendirme",
+        "Eğitim":        f"eğitim destek ve öğretim",
+        "Sağlık":        f"sağlık hizmetleri ve bilinçlendirme",
+        "Hayvan Hakları":f"hayvan refahı ve barınak destek",
+        "Yaşlı Bakımı":  f"yaşlı bakımı ve sosyal destek",
+        "Çocuk Gelişimi":f"çocuk gelişimi ve eğitim destek",
+        "Teknoloji":     f"teknoloji ile sosyal fayda",
+        "Sanat & Kültür":f"sanat ve kültür",
+    }
+    tasks = {
+        "Çevre":         f"Etkinlik boyunca ağaç dikme, alan temizliği ve farkındalık çalışmaları yürütülecek.",
+        "Eğitim":        f"Öğrencilere birebir ders desteği verilecek, eğitim materyalleri hazırlanacak.",
+        "Sağlık":        f"Sağlık taraması organizasyonu, bilgi standı kurulumu ve materyal dağıtımı yapılacak.",
+        "Hayvan Hakları":f"Barınak hayvanlarına bakılacak, mama dağıtımı yapılacak ve sahiplendirme organizasyonu düzenlenecek.",
+        "Yaşlı Bakımı":  f"Yaşlı bireylere ziyaret, sohbet ve aktivite desteği sağlanacak.",
+        "Çocuk Gelişimi":f"Oyun, sanat ve eğitim atölyeleri düzenlenecek; çocukların bireysel gelişimleri desteklenecek.",
+        "Teknoloji":     f"Kod yazma, tasarım veya teknik destek görevlerinden biri üstlenilecek.",
+        "Sanat & Kültür":f"Etkinlik organizasyonu, dekor hazırlığı veya performans süreçlerinde aktif görev alınacak.",
+    }
+    action = actions.get(category, f"{category.lower()} alanında gönüllü çalışmalar")
+    task   = tasks.get(category, f"Gönüllüler {title} etkinliğinde aktif görev üstlenecek.")
+
+    return {
+        "short_description": (
+            f"{city}'de '{title}' etkinliğiyle {action} alanında gönüllüler bir araya geliyor."
+        ),
+        "description": (
+            f"{title}, {city}'deki {action} faaliyetlerinin bir parçası olarak düzenleniyor. "
+            f"Bu etkinlik; yerel topluluğun ihtiyaçlarına doğrudan yanıt veren, "
+            f"pratik ve ölçülebilir bir etki yaratmayı hedefliyor.\n\n"
+            f"{task} Organizasyon ekibi gerekli tüm malzeme ve yönlendirmeyi sağlayacak; "
+            f"önceden deneyim şartı aranmıyor.\n\n"
+            f"Katılımcılar bu etkinlikten {city} özelinde somut bir iz bırakmanın yanı sıra "
+            f"{category} alanında uygulamalı deneyim ve yeni bir sosyal çevre kazanacak."
+        ),
+    }
 
 
 @router.post("/{event_id}/complete")
@@ -568,6 +589,10 @@ async def ai_welcome(
     db: AsyncSession = Depends(get_db),
 ):
     """Dashboard için kişiselleştirilmiş AI karşılama mesajı üret."""
+    # ORM modelindeki JSON string alanlarını Python listesine dönüştür
+    user.interests = _safe_json_list(user.interests)  # type: ignore[assignment]
+    user.skills    = _safe_json_list(user.skills)     # type: ignore[assignment]
+
     stmt   = select(Event).where(Event.status.in_(["active", "full"])).limit(10)
     result = await db.execute(stmt)
     events = result.scalars().all()
@@ -596,7 +621,7 @@ async def enrich_event(db: AsyncSession, event: Event, user: User | None, detail
         "max_participants":    event.max_participants,
         "participant_count":   count,
         "cover_photo_url":     event.cover_photo_url,
-        "required_skills":     json.loads(event.required_skills) if isinstance(event.required_skills, str) else (event.required_skills or []),
+        "required_skills":     _safe_json_list(event.required_skills),
         "preparation_notes":   event.preparation_notes,
         "status":              event.status,
         "verification_method": event.verification_method,
@@ -625,6 +650,21 @@ async def enrich_event(db: AsyncSession, event: Event, user: User | None, detail
         data["user_verified"] = participant.verified_at is not None if participant else False
 
     return data
+
+
+def _safe_json_list(value) -> list:
+    """JSON string'i güvenli biçimde Python listesine çevirir.
+    None, boş string veya geçersiz JSON durumunda [] döner.
+    """
+    if not value:
+        return []
+    if isinstance(value, list):
+        return value
+    try:
+        result = json.loads(value)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 def settings_available() -> bool:

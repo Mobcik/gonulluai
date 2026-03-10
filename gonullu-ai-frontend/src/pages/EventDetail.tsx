@@ -194,7 +194,8 @@ const EventDetail = () => {
     );
   }
 
-  const pct      = event.max_participants ? Math.round((event.participant_count / event.max_participants) * 100) : 0;
+  const participantCount = event.participant_count ?? 0;
+  const pct      = event.max_participants ? Math.round((participantCount / event.max_participants) * 100) : 0;
   const daysLeft = daysUntilEvent(event.event_date);
   const isToday  = daysLeft === 0;
 
@@ -262,7 +263,7 @@ const EventDetail = () => {
                 {[
                   { icon: <Calendar size={16} className="text-primary" />, label: 'Tarih', value: formatEventDate(event.event_date) },
                   { icon: <MapPin size={16} className="text-primary" />,    label: 'Şehir', value: event.city },
-                  { icon: <Users size={16} className="text-primary" />,     label: 'Katılımcı', value: `${event.participant_count}${event.max_participants ? `/${event.max_participants}` : ''}` },
+                  { icon: <Users size={16} className="text-primary" />,     label: 'Katılımcı', value: `${participantCount}${event.max_participants ? `/${event.max_participants}` : ''}` },
                   { icon: <Clock size={16} className="text-primary" />,     label: 'Kalan', value: daysLeft < 0 ? 'Geçti' : daysLeft === 0 ? 'Bugün!' : `${daysLeft} gün` },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-2">
@@ -302,11 +303,11 @@ const EventDetail = () => {
                 </div>
               )}
 
-              {event.required_skills.length > 0 && (
+              {(event.required_skills ?? []).length > 0 && (
                 <div className="mt-4">
                   <h3 className="text-sm font-semibold text-text mb-2">Gerekli Yetenekler</h3>
                   <div className="flex flex-wrap gap-2">
-                    {event.required_skills.map(skill => (
+                    {(event.required_skills ?? []).map(skill => (
                       <span key={skill} className="chip chip-inactive text-xs">{skill}</span>
                     ))}
                   </div>
@@ -560,8 +561,8 @@ const EventDetail = () => {
                   </div>
                   {event.max_participants && (
                     <p className="text-sm text-text-muted mt-1">
-                      {event.max_participants - event.participant_count > 0
-                        ? `${event.max_participants - event.participant_count} yer kaldı`
+                      {event.max_participants - participantCount > 0
+                        ? `${event.max_participants - participantCount} yer kaldı`
                         : 'Etkinlik dolu'
                       }
                     </p>
