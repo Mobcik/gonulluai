@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Check, Upload, X, Link as LinkIcon, Sparkles } from 'lucide-react';
+import {
+  ChevronRight, ChevronLeft, Check, Upload, X,
+  Link as LinkIcon, Sparkles, MapPin, Clock, Calendar,
+} from 'lucide-react';
 import { eventsApi, type CreateEventPayload } from '../api/events';
 import api from '../api/client';
 import type { EventCategory } from '../types';
@@ -10,27 +13,43 @@ import { categoryEmoji } from '../utils/formatPoints';
 import { cn } from '../utils/cn';
 import toast from 'react-hot-toast';
 
-const CATEGORIES: EventCategory[] = ['Çevre', 'Eğitim', 'Sağlık', 'Hayvan Hakları', 'Yaşlı Bakımı', 'Çocuk Gelişimi', 'Teknoloji', 'Sanat & Kültür'];
-const SKILLS = ['İletişim', 'Organizasyon', 'Eğitim', 'Teknik', 'Sağlık', 'Fiziksel Aktivite', 'Sanat', 'Teknoloji', 'Yabancı Dil', 'Sürücü Belgesi'];
-const CITIES = ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Gaziantep', 'Kayseri', 'Mersin', 'Samsun', 'Trabzon', 'Eskişehir', 'Diğer'];
-const STEPS = ['Temel Bilgiler', 'Lojistik', 'Medya ve Yayın'];
+const CATEGORIES: EventCategory[] = [
+  'Çevre', 'Eğitim', 'Sağlık', 'Hayvan Hakları',
+  'Yaşlı Bakımı', 'Çocuk Gelişimi', 'Teknoloji', 'Sanat & Kültür',
+];
+const SKILLS = [
+  'İletişim', 'Liderlik', 'Yazılım', 'Tasarım', 'Öğretmenlik',
+  'Tıp / Sağlık', 'Fotoğrafçılık', 'Müzik', 'Tercüme',
+  'Araç Kullanımı', 'Sosyal Medya', 'Muhasebe', 'Hukuk',
+];
+const CITIES = [
+  'İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Adana',
+  'Konya', 'Gaziantep', 'Kayseri', 'Mersin', 'Samsun', 'Trabzon', 'Eskişehir', 'Diğer',
+];
+
+// Adım 0 → konum/zaman | Adım 1 → içerik + AI | Adım 2 → detaylar | Adım 3 → medya
+const STEPS = ['Konum & Zaman', 'İçerik', 'Detaylar', 'Medya & Yayın'];
 
 interface FormState {
+  // Adım 0
   title:               string;
-  short_description:   string;
-  description:         string;
   category:            string;
-  required_skills:     string[];
   city:                string;
   address:             string;
   meeting_point:       string;
   event_date:          string;
   event_time:          string;
   end_time:            string;
+  // Adım 1
+  short_description:   string;
+  description:         string;
+  required_skills:     string[];
+  // Adım 2
   max_participants:    string;
   verification_method: 'qr' | 'code' | 'none';
   contact_info:        string;
   preparation_notes:   string;
+  // Adım 3
   coverFile:           File | null;
   coverPreview:        string;
   coverUrl:            string;
@@ -38,38 +57,47 @@ interface FormState {
 }
 
 const INIT: FormState = {
-  title: '', short_description: '', description: '', category: '',
-  required_skills: [], city: '', address: '', meeting_point: '',
-  event_date: '', event_time: '10:00', end_time: '', max_participants: '',
-  verification_method: 'code', contact_info: '', preparation_notes: '',
+  title: '', category: '', city: '', address: '', meeting_point: '',
+  event_date: '', event_time: '10:00', end_time: '',
+  short_description: '', description: '', required_skills: [],
+  max_participants: '', verification_method: 'code',
+  contact_info: '', preparation_notes: '',
   coverFile: null, coverPreview: '', coverUrl: '', publishNow: true,
 };
 
 const EventCreate = () => {
-  const navigate       = useNavigate();
-  const [step, setStep]       = useState(0);
-  const [loading, setLoading] = useState(false);
+  const navigate            = useNavigate();
+  const [step, setStep]     = useState(0);
+  const [loading, setLoading]   = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [form, setForm]       = useState<FormState>(INIT);
+  const [form, setForm]     = useState<FormState>(INIT);
 
   const upd = (key: keyof FormState, value: unknown) =>
     setForm(prev => ({ ...prev, [key]: value }));
 
+  // ── AI ile Doldur — Adım 0 verilerini de gönderir ─────────────────────────
   const handleAiGenerate = async () => {
-    if (!form.title.trim() || !form.category) {
-      toast.error('Önce etkinlik adı ve kategori gir');
+    if (!form.title.trim()) {
+      toast.error('Önce etkinlik adı gir');
       return;
     }
     setAiLoading(true);
     try {
       const { data } = await eventsApi.generateDescription(
         form.title,
-        form.category,
+        form.category || 'Genel',
         form.city || 'Türkiye',
-        form.short_description,
+        // Adım 0'dan toplanan bağlam: adres + saat AI'a geçiyor
+        [
+          form.address && `Adres: ${form.address}`,
+          form.meeting_point && `Buluşma: ${form.meeting_point}`,
+          form.event_time && `Saat: ${form.event_time}`,
+          form.end_time && `Bitiş: ${form.end_time}`,
+          form.event_date && `Tarih: ${form.event_date}`,
+        ].filter(Boolean).join(' | '),
       );
       if (data.short_description) upd('short_description', data.short_description);
-      if (data.description) upd('description', data.description);
+      if (data.description)       upd('description', data.description);
       toast.success('AI açıklama oluşturdu! Düzenleyebilirsin ✨');
     } catch {
       toast.error('AI şu an kullanılamıyor, tekrar dene');
@@ -85,17 +113,17 @@ const EventCreate = () => {
     upd('coverPreview', URL.createObjectURL(file));
   };
 
-  // ─── adım doğrulama ────────────────────────────────────────────────────────
+  // ── Adım doğrulama ────────────────────────────────────────────────────────
   const validateStep = (s: number): string | null => {
     if (s === 0) {
-      if (!form.title.trim())               return 'Etkinlik adı zorunlu';
-      if (!form.short_description.trim())   return 'Kısa açıklama zorunlu';
-      if (!form.description.trim())         return 'Detaylı açıklama zorunlu';
-      if (!form.category)                   return 'Kategori seçimi zorunlu';
+      if (!form.title.trim())    return 'Etkinlik adı zorunlu';
+      if (!form.category)        return 'Kategori seçimi zorunlu';
+      if (!form.event_date)      return 'Tarih seçimi zorunlu';
+      if (!form.city)            return 'Şehir seçimi zorunlu';
     }
     if (s === 1) {
-      if (!form.event_date)   return 'Tarih seçimi zorunlu';
-      if (!form.city)         return 'Şehir seçimi zorunlu';
+      if (!form.short_description.trim()) return 'Kısa açıklama zorunlu';
+      if (!form.description.trim())       return 'Detaylı açıklama zorunlu';
     }
     return null;
   };
@@ -104,6 +132,7 @@ const EventCreate = () => {
     const err = validateStep(step);
     if (err) { toast.error(err); return; }
     setStep(s => s + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async () => {
@@ -151,6 +180,9 @@ const EventCreate = () => {
     }
   };
 
+  // ── Adım 0 tamamlandı mı? (AI butonunu aktif etmek için) ─────────────────
+  const step0Done = !!(form.title.trim() && form.category && form.city);
+
   return (
     <div className="min-h-screen pt-20 pb-16 bg-earth-lighter">
       <div className="max-w-2xl mx-auto px-4">
@@ -162,22 +194,25 @@ const EventCreate = () => {
         </div>
 
         {/* Adım göstergesi */}
-        <div className="flex items-center justify-center gap-2 mb-8">
+        <div className="flex items-center justify-center gap-1 mb-8">
           {STEPS.map((s, i) => (
-            <div key={i} className="flex items-center gap-2">
+            <div key={i} className="flex items-center gap-1">
               <div className={cn(
                 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all',
                 i < step   ? 'bg-primary text-white' :
                 i === step ? 'bg-primary text-white shadow-green' :
                              'bg-earth-lighter border-2 border-earth-light text-text-muted'
               )}>
-                {i < step ? <Check size={16} /> : i + 1}
+                {i < step ? <Check size={14} /> : i + 1}
               </div>
-              <span className={cn('text-sm font-medium hidden sm:block', i === step ? 'text-primary' : 'text-text-muted')}>
+              <span className={cn(
+                'text-xs font-medium hidden sm:block',
+                i === step ? 'text-primary' : 'text-text-muted'
+              )}>
                 {s}
               </span>
               {i < STEPS.length - 1 && (
-                <div className={cn('w-8 h-0.5 mx-1', i < step ? 'bg-primary' : 'bg-earth-lighter')} />
+                <div className={cn('w-6 h-0.5 mx-1', i < step ? 'bg-primary' : 'bg-earth-lighter')} />
               )}
             </div>
           ))}
@@ -186,35 +221,21 @@ const EventCreate = () => {
         {/* İçerik kartı */}
         <div className="card shadow-card-hover animate-fadeIn">
 
-          {/* ── ADIM 0 ─ Temel Bilgiler ──────────────────────────────────── */}
+          {/* ── ADIM 0 ─ Konum & Zaman ──────────────────────────────────── */}
           {step === 0 && (
             <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold text-lg text-text">Temel Bilgiler</h2>
-                <button
-                  type="button"
-                  onClick={handleAiGenerate}
-                  disabled={aiLoading || !form.title.trim()}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all',
-                    form.title.trim()
-                      ? 'bg-primary text-white shadow-green hover:bg-primary-dark hover:-translate-y-0.5'
-                      : 'bg-earth-lighter text-text-muted cursor-not-allowed'
-                  )}
-                  title="Etkinlik adını girerek aktif et"
-                >
-                  {aiLoading ? (
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Sparkles size={12} />
-                  )}
-                  {aiLoading ? 'AI yazıyor…' : 'AI ile Doldur'}
-                </button>
+              <div>
+                <h2 className="font-semibold text-lg text-text">Konum & Zaman</h2>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Bu bilgiler AI'ın daha iyi açıklama yazması için kullanılır
+                </p>
               </div>
 
+              {/* Başlık + Kategori */}
               <div>
                 <label className="block text-sm font-medium text-text mb-1.5">
-                  Etkinlik Adı <span className="text-text-muted text-xs">({form.title.length}/80)</span>
+                  Etkinlik Adı <span className="text-red-400">*</span>
+                  <span className="text-text-muted text-xs font-normal ml-1">({form.title.length}/80)</span>
                 </label>
                 <input
                   type="text" maxLength={80}
@@ -226,38 +247,9 @@ const EventCreate = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
-                  Kısa Açıklama <span className="text-text-muted text-xs">({form.short_description.length}/160)</span>
+                <label className="block text-sm font-medium text-text mb-2">
+                  Kategori <span className="text-red-400">*</span>
                 </label>
-                <input
-                  type="text" maxLength={160}
-                  value={form.short_description}
-                  onChange={e => upd('short_description', e.target.value)}
-                  placeholder="Kart üzerinde görünecek kısa tanım"
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
-                  Detaylı Açıklama <span className="text-text-muted text-xs">({form.description.length} karakter)</span>
-                </label>
-                <textarea
-                  rows={6}
-                  value={form.description}
-                  onChange={e => upd('description', e.target.value)}
-                  placeholder="Etkinlik detaylarını, amacını ve nasıl katılabileceğini anlat…"
-                  className="input resize-none"
-                />
-                {form.description && (
-                  <p className="text-xs text-text-muted mt-1">
-                    ✏️ AI tarafından oluşturuldu — istediğin gibi düzenleyebilirsin
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text mb-2">Kategori</label>
                 <div className="flex flex-wrap gap-2">
                   {CATEGORIES.map(cat => (
                     <Chip
@@ -270,9 +262,200 @@ const EventCreate = () => {
                 </div>
               </div>
 
+              {/* Tarih + Saat */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-text mb-1.5">
+                    <Calendar size={13} className="text-primary" />
+                    Tarih <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={form.event_date}
+                    min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                    onChange={e => upd('event_date', e.target.value)}
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-text mb-1.5">
+                    <Clock size={13} className="text-primary" />
+                    Başlangıç Saati
+                  </label>
+                  <input
+                    type="time"
+                    value={form.event_time}
+                    onChange={e => upd('event_time', e.target.value)}
+                    className="input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Bitiş Saati
+                  <span className="text-text-muted font-normal text-xs ml-1">(opsiyonel)</span>
+                </label>
+                <input
+                  type="time"
+                  value={form.end_time}
+                  onChange={e => upd('end_time', e.target.value)}
+                  className="input"
+                />
+              </div>
+
+              {/* Konum */}
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Şehir <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={form.city}
+                  onChange={e => upd('city', e.target.value)}
+                  className="input"
+                >
+                  <option value="">Şehir seç...</option>
+                  {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-1.5 text-sm font-medium text-text mb-1.5">
+                  <MapPin size={13} className="text-primary" />
+                  Adres
+                  <span className="text-text-muted font-normal text-xs">(opsiyonel)</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.address}
+                  onChange={e => upd('address', e.target.value)}
+                  placeholder="Cadde, mahalle veya mekan adı"
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Buluşma Noktası
+                  <span className="text-text-muted font-normal text-xs ml-1">(opsiyonel)</span>
+                </label>
+                <input
+                  type="text"
+                  value={form.meeting_point}
+                  onChange={e => upd('meeting_point', e.target.value)}
+                  placeholder="Örn: Ana giriş kapısı, otopark girişi"
+                  className="input"
+                />
+              </div>
+
+              {/* Özet kutusu — ne seçildiğini göster */}
+              {(form.city || form.address || form.event_date) && (
+                <div className="bg-primary-light rounded-xl p-4 text-sm space-y-1.5">
+                  <p className="font-semibold text-primary text-xs uppercase tracking-wide mb-2">
+                    Etkinlik Özeti
+                  </p>
+                  {form.event_date && (
+                    <div className="flex items-center gap-2 text-text-soft">
+                      <Calendar size={13} className="text-primary flex-shrink-0" />
+                      {form.event_date} · {form.event_time}
+                      {form.end_time && ` – ${form.end_time}`}
+                    </div>
+                  )}
+                  {form.city && (
+                    <div className="flex items-center gap-2 text-text-soft">
+                      <MapPin size={13} className="text-primary flex-shrink-0" />
+                      {form.city}{form.address && `, ${form.address}`}
+                    </div>
+                  )}
+                  {form.meeting_point && (
+                    <div className="flex items-center gap-2 text-text-soft">
+                      <span className="text-primary">📍</span>
+                      {form.meeting_point}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── ADIM 1 ─ İçerik + AI ─────────────────────────────────────── */}
+          {step === 1 && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-lg text-text">Etkinlik İçeriği</h2>
+                  <p className="text-xs text-text-muted mt-0.5">
+                    Konum ve zaman bilgileriyle kişiselleştirilmiş açıklama üret
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAiGenerate}
+                  disabled={aiLoading || !step0Done}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border',
+                    step0Done
+                      ? 'bg-primary text-white border-primary shadow-green hover:bg-primary-dark hover:-translate-y-0.5'
+                      : 'bg-earth-lighter text-text-muted border-earth-light cursor-not-allowed'
+                  )}
+                  title={step0Done ? 'Konum ve zaman bilgileriyle AI açıklama üretir' : 'Adım 1\'de başlık, kategori ve şehir gerekli'}
+                >
+                  {aiLoading
+                    ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Sparkles size={12} />
+                  }
+                  {aiLoading ? 'AI yazıyor…' : 'AI ile Doldur'}
+                </button>
+              </div>
+
+              {/* AI bağlam özeti — ne bildiğini göster */}
+              {step0Done && (
+                <div className="bg-earth-lighter rounded-xl px-4 py-3 text-xs text-text-muted flex flex-wrap gap-x-4 gap-y-1">
+                  <span className="font-semibold text-primary">AI bilgileri:</span>
+                  {form.category && <span>{categoryEmoji[form.category as EventCategory]} {form.category}</span>}
+                  {form.city     && <span>📍 {form.city}{form.address && `, ${form.address}`}</span>}
+                  {form.event_date && <span>📅 {form.event_date} {form.event_time}</span>}
+                  {form.meeting_point && <span>🚩 {form.meeting_point}</span>}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Kısa Açıklama <span className="text-red-400">*</span>
+                  <span className="text-text-muted text-xs font-normal ml-1">({form.short_description.length}/160)</span>
+                </label>
+                <input
+                  type="text" maxLength={160}
+                  value={form.short_description}
+                  onChange={e => upd('short_description', e.target.value)}
+                  placeholder="Kart üzerinde görünecek kısa tanım — veya AI ile oluştur"
+                  className="input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  Detaylı Açıklama <span className="text-red-400">*</span>
+                  <span className="text-text-muted text-xs font-normal ml-1">({form.description.length} karakter)</span>
+                </label>
+                <textarea
+                  rows={7}
+                  value={form.description}
+                  onChange={e => upd('description', e.target.value)}
+                  placeholder="Etkinlik detaylarını, amacını ve katılım bilgilerini anlat… veya AI ile oluştur"
+                  className="input resize-none"
+                />
+                {form.description && (
+                  <p className="text-xs text-text-muted mt-1">
+                    ✏️ İstediğin gibi düzenleyebilirsin
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-text mb-2">
-                  Gerekli Yetenekler <span className="text-text-muted font-normal">(opsiyonel)</span>
+                  Gerekli Yetenekler
+                  <span className="text-text-muted font-normal text-xs ml-1">(opsiyonel)</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {SKILLS.map(skill => (
@@ -292,82 +475,15 @@ const EventCreate = () => {
             </div>
           )}
 
-          {/* ── ADIM 1 ─ Lojistik ───────────────────────────────────────── */}
-          {step === 1 && (
+          {/* ── ADIM 2 ─ Detaylar ────────────────────────────────────────── */}
+          {step === 2 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-lg text-text">Lojistik Bilgiler</h2>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text mb-1.5">Tarih</label>
-                  <input
-                    type="date"
-                    value={form.event_date}
-                    min={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
-                    onChange={e => upd('event_date', e.target.value)}
-                    className="input"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text mb-1.5">Başlangıç Saati</label>
-                  <input
-                    type="time"
-                    value={form.event_time}
-                    onChange={e => upd('event_time', e.target.value)}
-                    className="input"
-                  />
-                </div>
-              </div>
+              <h2 className="font-semibold text-lg text-text">Etkinlik Detayları</h2>
 
               <div>
                 <label className="block text-sm font-medium text-text mb-1.5">
-                  Bitiş Saati <span className="text-text-muted font-normal">(opsiyonel)</span>
-                </label>
-                <input
-                  type="time"
-                  value={form.end_time}
-                  onChange={e => upd('end_time', e.target.value)}
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Şehir</label>
-                <select
-                  value={form.city}
-                  onChange={e => upd('city', e.target.value)}
-                  className="input"
-                >
-                  <option value="">Şehir seç...</option>
-                  {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Adres</label>
-                <input
-                  type="text"
-                  value={form.address}
-                  onChange={e => upd('address', e.target.value)}
-                  placeholder="Cadde, mahalle veya mekan adı"
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text mb-1.5">Buluşma Noktası</label>
-                <input
-                  type="text"
-                  value={form.meeting_point}
-                  onChange={e => upd('meeting_point', e.target.value)}
-                  placeholder="Örn: Ana giriş, otopark kapısı"
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
-                  Maksimum Katılımcı <span className="text-text-muted font-normal">(opsiyonel)</span>
+                  Maksimum Katılımcı
+                  <span className="text-text-muted font-normal text-xs ml-1">(opsiyonel — boş = sınırsız)</span>
                 </label>
                 <input
                   type="number" min={1}
@@ -379,12 +495,12 @@ const EventCreate = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-text mb-2">Varlık Doğrulama Yöntemi</label>
+                <label className="block text-sm font-medium text-text mb-2">Katılım Doğrulama</label>
                 <div className="grid grid-cols-3 gap-3">
                   {([
-                    { value: 'code', label: '6 Haneli Kod', desc: 'Katılımcılar kod girer' },
-                    { value: 'qr',   label: 'QR Kod',       desc: 'QR okutma ile' },
-                    { value: 'none', label: 'Yok',          desc: 'Doğrulama olmadan' },
+                    { value: 'code', label: '6 Haneli Kod',  desc: 'Organizatör kodu paylaşır',   emoji: '🔢' },
+                    { value: 'qr',   label: 'QR Kod',        desc: 'Telefonla QR okutma',         emoji: '📱' },
+                    { value: 'none', label: 'Doğrulamasız',  desc: 'Açık katılım',                emoji: '🔓' },
                   ] as const).map(opt => (
                     <button
                       key={opt.value}
@@ -397,6 +513,7 @@ const EventCreate = () => {
                           : 'border-earth-lighter hover:border-earth-light'
                       )}
                     >
+                      <div className="text-lg mb-1">{opt.emoji}</div>
                       <div className="font-semibold text-sm text-text">{opt.label}</div>
                       <div className="text-xs text-text-muted mt-0.5">{opt.desc}</div>
                     </button>
@@ -406,23 +523,47 @@ const EventCreate = () => {
 
               <div>
                 <label className="block text-sm font-medium text-text mb-1.5">
-                  İletişim Bilgisi <span className="text-text-muted font-normal">(opsiyonel)</span>
+                  Ön Hazırlık Notu
+                  <span className="text-text-muted font-normal text-xs ml-1">(opsiyonel)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={form.preparation_notes}
+                  onChange={e => upd('preparation_notes', e.target.value)}
+                  placeholder="Katılımcıların ne getirmesi gerektiğini yaz…"
+                  className="input resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">
+                  İletişim Bilgisi
+                  <span className="text-text-muted font-normal text-xs ml-1">(opsiyonel)</span>
                 </label>
                 <input
                   type="text"
                   value={form.contact_info}
                   onChange={e => upd('contact_info', e.target.value)}
-                  placeholder="E-posta veya telefon"
+                  placeholder="E-posta veya telefon numarası"
                   className="input"
                 />
+              </div>
+
+              {/* Puan özeti */}
+              <div className="p-4 bg-primary-light rounded-xl">
+                <h3 className="font-semibold text-primary text-sm mb-2">Etkinlik Oluştururken Kazanacakların</h3>
+                <div className="space-y-1 text-xs text-text-soft">
+                  <div className="flex justify-between"><span>Etkinlik oluşturma</span><span className="font-bold text-primary">+50 puan</span></div>
+                  <div className="flex justify-between"><span>Her katılımcı tamamladığında</span><span className="font-bold text-primary">+25 bonus</span></div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* ── ADIM 2 ─ Medya ve Yayın ─────────────────────────────────── */}
-          {step === 2 && (
+          {/* ── ADIM 3 ─ Medya & Yayın ──────────────────────────────────── */}
+          {step === 3 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-lg text-text">Medya ve Yayın</h2>
+              <h2 className="font-semibold text-lg text-text">Medya & Yayın</h2>
 
               <div>
                 <label className="block text-sm font-medium text-text mb-2">
@@ -457,7 +598,6 @@ const EventCreate = () => {
                       <span className="text-xs text-text-muted mt-1">JPG, PNG, WebP · Max 10MB</span>
                       <input type="file" accept="image/*" onChange={handleCoverFile} className="hidden" />
                     </label>
-
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-px bg-earth-lighter" />
                       <span className="text-xs text-text-muted">veya URL ile ekle</span>
@@ -477,27 +617,7 @@ const EventCreate = () => {
                 )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-text mb-1.5">
-                  Ön Hazırlık Notu <span className="text-text-muted font-normal">(opsiyonel)</span>
-                </label>
-                <textarea
-                  rows={3}
-                  value={form.preparation_notes}
-                  onChange={e => upd('preparation_notes', e.target.value)}
-                  placeholder="Katılımcıların ne getirmesi gerektiğini yaz..."
-                  className="input resize-none"
-                />
-              </div>
-
-              <div className="p-4 bg-primary-light rounded-xl">
-                <h3 className="font-semibold text-primary text-sm mb-2">Etkinlik Oluştururken Kazanacakların</h3>
-                <div className="space-y-1 text-xs text-text-soft">
-                  <div className="flex justify-between"><span>Etkinlik oluşturma</span><span className="font-bold text-primary">+50 puan</span></div>
-                  <div className="flex justify-between"><span>Her katılımcı tamamladığında</span><span className="font-bold text-primary">+25 puan</span></div>
-                </div>
-              </div>
-
+              {/* Yayın durumu */}
               <div className="flex items-center justify-between p-4 bg-earth-lighter rounded-xl">
                 <div>
                   <div className="font-medium text-text text-sm">Hemen Yayınla</div>
@@ -511,22 +631,30 @@ const EventCreate = () => {
                   <div className={cn('w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all', form.publishNow ? 'right-0.5' : 'left-0.5')} />
                 </button>
               </div>
+
+              {/* Özet — yayınlamadan önce kontrol */}
+              <div className="bg-white border border-earth-lighter rounded-xl p-4 space-y-2 text-sm">
+                <p className="font-semibold text-text text-xs uppercase tracking-wide mb-3">Özet</p>
+                <div className="flex justify-between text-text-soft"><span>Etkinlik</span><span className="text-text font-medium truncate max-w-[200px]">{form.title}</span></div>
+                <div className="flex justify-between text-text-soft"><span>Kategori</span><span className="text-text">{form.category}</span></div>
+                <div className="flex justify-between text-text-soft"><span>Tarih</span><span className="text-text">{form.event_date} {form.event_time}</span></div>
+                <div className="flex justify-between text-text-soft"><span>Şehir</span><span className="text-text">{form.city}</span></div>
+                {form.address && <div className="flex justify-between text-text-soft"><span>Adres</span><span className="text-text truncate max-w-[200px]">{form.address}</span></div>}
+                {form.meeting_point && <div className="flex justify-between text-text-soft"><span>Buluşma</span><span className="text-text truncate max-w-[200px]">{form.meeting_point}</span></div>}
+              </div>
             </div>
           )}
 
-          {/* ── Gezinme butonları ─────────────────────────────────────────── */}
+          {/* ── Gezinme butonları ─────────────────────────────────────── */}
           <div className={cn('flex mt-8 pt-6 border-t border-earth-lighter', step > 0 ? 'justify-between' : 'justify-end')}>
             {step > 0 && (
-              <Button type="button" variant="outline" onClick={() => setStep(s => s - 1)}>
-                <ChevronLeft size={16} />
-                Geri
+              <Button type="button" variant="outline" onClick={() => { setStep(s => s - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+                <ChevronLeft size={16} /> Geri
               </Button>
             )}
-
             {step < STEPS.length - 1 ? (
               <Button type="button" onClick={handleNext}>
-                İleri
-                <ChevronRight size={16} />
+                İleri <ChevronRight size={16} />
               </Button>
             ) : (
               <Button type="button" loading={loading} onClick={handleSubmit}>
