@@ -1,5 +1,5 @@
 import api from './client';
-import type { Event, Comment, PhotoItem } from '../types';
+import type { Event, Comment, PhotoItem, VerificationMethod } from '../types';
 
 export interface EventFilters {
   category?: string;
@@ -23,14 +23,16 @@ export interface CreateEventPayload {
   required_skills:     string[];
   preparation_notes?:  string;
   contact_info?:       string;
-  verification_method: 'qr' | 'code' | 'none';
+  verification_method: VerificationMethod;
   cover_photo_url?:    string;
 }
 
 export const eventsApi = {
+  /** Kullanıcı profiline göre AI sıralamalı etkinlik listesi */
   discover: (params?: EventFilters) =>
     api.get<Event[]>('/events/discover', { params }),
 
+  /** Standart etkinlik listesi (giriş gerekmez) */
   list: (params?: EventFilters) =>
     api.get<Event[]>('/events', { params }),
 
@@ -46,23 +48,23 @@ export const eventsApi = {
   delete: (id: string) =>
     api.delete(`/events/${id}`),
 
+  /** Etkinliğe katıl — puan etkinlik günü doğrulama ile verilir */
   join: (id: string) =>
-    api.post(`/events/${id}/join`),
+    api.post<{ message: string }>(`/events/${id}/join`),
 
   leave: (id: string) =>
-    api.delete(`/events/${id}/join`),
+    api.delete<{ message: string }>(`/events/${id}/join`),
 
+  /** Organizatör etkinliği tamamlandı işaretler; doğrulanan katılımcılara +25 bonus */
   complete: (id: string) =>
-    api.post(`/events/${id}/complete`),
+    api.post<{ message: string; verified_count: number }>(`/events/${id}/complete`),
 
+  /** Katılımcı 6 haneli doğrulama koduyla varlığını kanıtlar (+35 puan) */
   verify: (id: string, code: string) =>
     api.post<{ message: string }>(`/events/${id}/verify`, null, { params: { code } }),
 
   getParticipants: (id: string) =>
     api.get(`/events/${id}/participants`),
-
-  announce: (id: string, message: string) =>
-    api.post(`/events/${id}/announce`, { message }),
 
   getPhotos: (id: string) =>
     api.get<PhotoItem[]>(`/events/${id}/photos`),
@@ -78,4 +80,11 @@ export const eventsApi = {
 
   addComment: (id: string, content: string, rating?: number) =>
     api.post<Comment>(`/events/${id}/comments`, { content, rating }),
+
+  /** Gemini ile etkinlik kısa + detaylı açıklaması üret */
+  generateDescription: (title: string, category: string, city: string, short_desc?: string) =>
+    api.post<{ short_description: string; description: string }>(
+      '/events/ai-generate-description',
+      { title, category, city, short_desc },
+    ),
 };

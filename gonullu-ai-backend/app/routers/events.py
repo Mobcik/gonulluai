@@ -208,19 +208,17 @@ async def join_event(
 
     participant = EventParticipant(event_id=event.id, user_id=user.id)
     db.add(participant)
-    await award_points(db, str(user.id), 20, "event_join", str(event.id))
+    # Katılım kaydı oluşturuldu — puan etkinlik günü doğrulama yapıldığında verilir
 
-    # Bildirim: etkinliğe katılındı
     from app.models.reward import Notification
-    from datetime import date
     event_date_str = event.event_date.strftime("%d %B") if event.event_date else ""
     db.add(Notification(
         user_id=user.id,
         type="event_join",
-        message=f'"{event.title}" etkinliğine katıldın! {event_date_str} tarihinde görüşürüz. +20 puan 🎉',
+        message=f'"{event.title}" etkinliğine kayıt oldun! {event_date_str} tarihinde katılımını doğrula ve +35 puan kazan. 🎯',
     ))
     await db.commit()
-    return {"message": "+20 puan kazandın! 🎉"}
+    return {"message": "Etkinliğe kayıt oldun! Katılımını doğrulayarak 35 puan kazan. 🎯"}
 
 
 @router.delete("/{event_id}/join")
@@ -281,8 +279,16 @@ async def verify_attendance(
         raise HTTPException(400, "Zaten doğrulandın")
 
     participant.verified_at = datetime.now(timezone.utc)
-    await award_points(db, str(user.id), 15, "attendance_verified", event_id)
-    return {"message": "+15 puan kazandın! Katılımın doğrulandı ✅"}
+    await award_points(db, str(user.id), 35, "attendance_verified", event_id)
+
+    from app.models.reward import Notification
+    db.add(Notification(
+        user_id=user.id,
+        type="attendance_verified",
+        message=f'Katılımın doğrulandı! +35 puan kazandın. Harika iş! ✅',
+    ))
+    await db.commit()
+    return {"message": "+35 puan kazandın! Katılımın doğrulandı ✅"}
 
 
 @router.post("/{event_id}/photos")
@@ -454,6 +460,123 @@ async def get_participants(
         select(EventParticipant).where(EventParticipant.event_id == event_id)
     )
     return result.scalars().all()
+
+
+@router.post("/ai-generate-description")
+async def ai_generate_description(
+    data: dict,
+    user: User = Depends(get_current_user),
+):
+    """Gemini ile etkinlik açıklaması üret. Gemini çalışmazsa şablon döner."""
+    title    = data.get("title", "Gönüllülük Etkinliği")
+    category = data.get("category", "Genel")
+    city     = data.get("city", "Türkiye")
+    short_desc = data.get("short_desc", "")
+
+    result = await ai_service.generate_event_description(title, category, city, short_desc)
+
+    # Gemini çalışmazsa anlamlı bir şablon döndür
+    if not result:
+        result = {
+            "short_description": (
+                f"{city}'de düzenlenen {category.lower()} temalı bu etkinlikte "
+                f"gönüllü olarak yer al ve gerçek bir fark yarat!"
+            ),
+            "description": (
+                f"## {title}\n\n"
+                f"Bu etkinlikte birlikte anlamlı bir fark yaratacağız. "
+                f"Gönüllü olarak katıldığında hem topluma katkı sağlayacak "
+                f"hem de yeni beceriler kazanacaksın.\n\n"
+                f"**Kimler katılabilir?**\n"
+                f"Herkes katılabilir! Önceden deneyim gerekmez.\n\n"
+                f"**Neden katılmalısın?**\n"
+                f"- Gerçek bir etki yaratma fırsatı\n"
+                f"- Yeni insanlarla tanışma\n"
+                f"- {category} alanında deneyim kazanma\n"
+                f"- GönüllüAI'da puan ve rozet kazanma\n\n"
+                f"Seni {city}'de bu güzel etkinlikte görmek isteriz! 🌿"
+            ),
+        }
+    return result
+
+
+@router.post("/{event_id}/complete")
+async def complete_event(
+    event_id: str,
+    user: User        = Depends(get_current_user),
+    db: AsyncSession  = Depends(get_db),
+):
+    """Organizatör etkinliği tamamlandı olarak işaretler."""
+    event = await get_event_or_404(db, event_id)
+
+    if str(event.creator_id) != str(user.id) and not user.is_admin:
+        raise HTTPException(403, "Yalnızca etkinlik organizatörü tamamlayabilir")
+
+    if event.status == "completed":
+        raise HTTPException(400, "Etkinlik zaten tamamlandı")
+
+    if event.status not in ["active", "full", "ongoing"]:
+        raise HTTPException(400, "Bu etkinlik tamamlanamaz")
+
+    event.status = "completed"
+
+    # Doğrulanmış katılımcılara +25 bonus puan ver
+    from app.models.reward import Notification
+    result = await db.execute(
+        select(EventParticipant).where(
+            EventParticipant.event_id == event_id,
+            EventParticipant.verified_at.isnot(None),
+        )
+    )
+    verified_participants = result.scalars().all()
+
+    for p in verified_participants:
+        await award_points(db, str(p.user_id), 25, "event_complete", event_id)
+        db.add(Notification(
+            user_id=p.user_id,
+            type="event_complete",
+            message=f'"{event.title}" tamamlandı! Katılımın için +25 bonus puan kazandın. 🏁',
+        ))
+
+    await db.commit()
+    return {
+        "message": "Etkinlik tamamlandı olarak işaretlendi",
+        "verified_count": len(verified_participants),
+    }
+
+
+@router.post("/ai-skill-reasons")
+async def ai_skill_reasons(
+    data: dict,
+    user: User = Depends(get_current_user),
+):
+    """
+    Kullanıcı yeteneklerine göre etkinlik eşleşme nedenlerini Gemini ile üret.
+    Body: { skills: [...], events: [{id, title, category, required_skills}] }
+    """
+    skills = data.get("skills", [])
+    events = data.get("events", [])
+    if not events:
+        return []
+    result = await ai_service.generate_skill_reasons(skills, events)
+    return result  # boş liste dönebilir — frontend fallback'i var
+
+
+@router.get("/ai-welcome")
+async def ai_welcome(
+    user: User       = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dashboard için kişiselleştirilmiş AI karşılama mesajı üret."""
+    stmt   = select(Event).where(Event.status.in_(["active", "full"])).limit(10)
+    result = await db.execute(stmt)
+    events = result.scalars().all()
+
+    ranked    = await ai_service.rank_events(user, list(events)) if events else []
+    top_title = ranked[0].title if ranked else ""
+
+    message = await ai_service.generate_welcome(user, top_title)
+    return {"message": message}
 
 
 async def enrich_event(db: AsyncSession, event: Event, user: User | None, detailed: bool = False) -> dict:

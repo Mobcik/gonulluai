@@ -59,6 +59,9 @@ api.interceptors.response.use(
       }
 
       if (!backendAvailable) {
+        // 30 saniye sonra tekrar backend'i kontrol et (recovery)
+        setTimeout(() => { backendAvailable = null; }, 30_000);
+
         const url    = (config.url || '').replace(BASE_URL, '');
         const method = config.method || 'get';
         let   body   = config.data;

@@ -1,6 +1,13 @@
 /**
- * Backend yokken devreye giren mock handler sistemi.
- * URL pattern eşleştirme ile gerçek API yanıtlarını simüle eder.
+ * Mock API sistemi — backend erişilemez olduğunda devreye girer.
+ *
+ * Çalışma mantığı:
+ *   api/client.ts içindeki Axios interceptor, ağ hatası aldığında
+ *   bu dosyadaki handleMockRequest fonksiyonunu çağırır.
+ *   URL pattern eşleştirme ile gerçek API yanıtları simüle edilir.
+ *
+ * Devre dışı bırakmak için: .env içinde VITE_API_URL canlı bir
+ *   backend'e işaret ettiğinde ve backend çalışırken mock devreye girmez.
  */
 import {
   MOCK_EVENTS, MOCK_USERS, MOCK_LEADERBOARD, MOCK_REWARDS,
@@ -8,10 +15,18 @@ import {
   delay, getEventById, getUserById, getUserEvents,
 } from './mockData';
 
-// localStorage'da oturum durumunu tutan demo kullanıcı
-const DEMO_USER = MOCK_USERS.find(u => u.id === 'u-demo')!;
-const LOCAL_JOINED_KEY = 'mock_joined_events';
-const LOCAL_USER_KEY   = 'mock_current_user';
+/**
+ * Mock oturum verisinin saklandığı localStorage anahtarları.
+ * AuthContext bu sabitleri import ederek logout sırasında temizler.
+ */
+export const MOCK_STORAGE_KEYS = {
+  currentUser:  'mock_current_user',
+  joinedEvents: 'mock_joined_events',
+} as const;
+
+const DEMO_USER        = MOCK_USERS.find(u => u.id === 'u-demo')!;
+const LOCAL_JOINED_KEY = MOCK_STORAGE_KEYS.joinedEvents;
+const LOCAL_USER_KEY   = MOCK_STORAGE_KEYS.currentUser;
 
 const getJoined = (): string[] => {
   try { return JSON.parse(localStorage.getItem(LOCAL_JOINED_KEY) || '[]'); }
@@ -183,7 +198,23 @@ const handlers: Array<{ pattern: RegExp; method?: string; fn: HandlerFn }> = [
     fn: (_url) => {
       const id = _url.match(/\/events\/([^/]+)\/join/)?.[1] || '';
       addJoined(id);
-      return { message: '+20 puan kazandın! 🎉' };
+      return { message: 'Etkinliğe kayıt oldun! Katılımını doğrulayarak 35 puan kazan. 🎯' };
+    },
+  },
+
+  // EVENTS /events/:id/complete (POST)
+  {
+    pattern: /\/events\/([^/]+)\/complete/,
+    method: 'post',
+    fn: (_url) => {
+      const id = _url.match(/\/events\/([^/]+)\/complete/)?.[1] || '';
+      // Mock event objesini tamamlandı olarak işaretle
+      const joined = getJoined();
+      const verifiedCount = joined.includes(id) ? 1 : 0;
+      return {
+        message: 'Etkinlik tamamlandı olarak işaretlendi',
+        verified_count: verifiedCount,
+      };
     },
   },
 
@@ -196,7 +227,57 @@ const handlers: Array<{ pattern: RegExp; method?: string; fn: HandlerFn }> = [
       if (code !== '123456') {
         throw { response: { status: 400, data: { detail: 'Geçersiz kod. Demo için: 123456' } } };
       }
-      return { message: '+15 puan kazandın! Katılımın doğrulandı ✅' };
+      // Mock: gerçek kullanıcıya da puan ver
+      const user = getSavedUser() || DEMO_USER;
+      const updated = { ...user, total_points: (user.total_points || 0) + 35, earned_points: (user.earned_points || 0) + 35 };
+      localStorage.setItem('mock_current_user', JSON.stringify(updated));
+      return { message: '+35 puan kazandın! Katılımın doğrulandı ✅' };
+    },
+  },
+
+  // AI açıklama üretme (mock)
+  {
+    pattern: /\/events\/ai-generate-description/,
+    method: 'post',
+    fn: (_url, _method, body) => {
+      const title    = body?.title    || 'Gönüllülük Etkinliği';
+      const category = body?.category || 'Genel';
+      const city     = body?.city     || 'İstanbul';
+      return {
+        short_description: `${city}'de düzenlenen ${category.toLowerCase()} temalı bu etkinlikte gönüllü olarak yer al ve fark yarat!`,
+        description: `## ${title}\n\nBu etkinlikte birlikte anlamlı bir fark yaratacağız. Gönüllü olarak katıldığında hem topluma katkı sağlayacak hem de yeni beceriler kazanacaksın.\n\n**Kimler katılabilir?**\nHerkes katılabilir! Önceden deneyim gerekmez, sadece istekli olmak yeterli.\n\n**Neden bu etkinliğe katılmalısın?**\n- Gerçek bir etki yaratma fırsatı\n- Yeni insanlarla tanışma\n- ${category} alanında deneyim kazanma\n- GönüllüAI'da puan ve rozet kazanma\n\nBizi bu güzel etkinlikte görmek isteriz! 🌿`,
+      };
+    },
+  },
+
+  // AI yetenek eşleşme nedenleri (mock)
+  {
+    pattern: /\/events\/ai-skill-reasons/,
+    method: 'post',
+    fn: (_url, _method, body) => {
+      const skills: string[] = body?.skills || [];
+      const events: any[]   = body?.events  || [];
+      const skillsStr = skills.length ? skills.join(' ve ') : 'gönüllülük';
+      return events.map((ev: any) => ({
+        event_id: ev.id,
+        reason: `${skillsStr} ${skills.length ? 'yeteneğin' : 'ilgin'} "${ev.title}" etkinliğinde gerçekten işe yarar — bu fırsatı kaçırma! 🌟`,
+      }));
+    },
+  },
+
+  // AI karşılama mesajı (mock)
+  {
+    pattern: /\/events\/ai-welcome/,
+    method: 'get',
+    fn: () => {
+      const user = getSavedUser() || DEMO_USER;
+      const name = (user.full_name || 'Gönüllü').split(' ')[0];
+      const msgs = [
+        `Hoş geldin ${name}! Bugün harika bir etkinlikte fark yaratabilirsin. 🌿`,
+        `Merhaba ${name}! Seninle eşleşen yeni etkinlikler seni bekliyor. ✨`,
+        `${name}, bugün topluma katkı sağlamak için mükemmel bir gün! 🌱`,
+      ];
+      return { message: msgs[Math.floor(Math.random() * msgs.length)] };
     },
   },
 

@@ -83,7 +83,7 @@ const EventAnalytics = () => {
       ['Katılımcı', data.participant_count],
       ['Kapasite %', data.capacity_pct],
       ['Öğrenci', data.student_count],
-      ['Fotoğraf', data.data_count],
+      ['Fotoğraf', data.photo_count],
       ['Yorum', data.comment_count],
       ['Ort. Puan', data.avg_rating ?? '-'],
       ['Toplam Puan', data.total_points_awarded],
