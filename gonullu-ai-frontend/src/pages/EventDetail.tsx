@@ -2,17 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Calendar, MapPin, Users, Clock, Share2, Heart, CheckCircle,
-  ChevronLeft, Camera, MessageSquare, Shield, Star, Copy, X, Upload, Loader2
+  ChevronLeft, Camera, MessageSquare, Shield, Star, Copy, X, Upload, Loader2,
+  FileSpreadsheet, FileText, QrCode,
 } from 'lucide-react';
 import { eventsApi } from '../api/events';
+import { BASE_URL, API_ORIGIN } from '../api/client';
 import type { Event, Comment, PhotoItem } from '../types';
-import { MOCK_EVENTS } from '../api/mockData';
 import { useAuth } from '../contexts/AuthContext';
 import { formatEventDate, daysUntilEvent } from '../utils/formatDate';
 import { categoryEmoji } from '../utils/formatPoints';
 import Avatar from '../components/common/Avatar';
 import Button from '../components/common/Button';
 import { cn } from '../utils/cn';
+import { resolveMediaUrl } from '../utils/resolveMediaUrl';
 import toast from 'react-hot-toast';
 
 const EventDetail = () => {
@@ -38,12 +40,14 @@ const EventDetail = () => {
   const [lightbox,      setLightbox]       = useState<number | null>(null);
   const [uploading,     setUploading]      = useState(false);
   const [completing,    setCompleting]     = useState(false);
+  const [exportingCsv,  setExportingCsv]   = useState(false);
+  const [exportingPdf,  setExportingPdf]   = useState(false);
+  const [exportingPoster, setExportingPoster] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    const fallbackEvent = MOCK_EVENTS.find(e => e.id === id) ?? MOCK_EVENTS[0];
     Promise.all([
-      eventsApi.get(id).then(r => setEvent(r.data)).catch(() => setEvent(fallbackEvent)),
+      eventsApi.get(id).then(r => setEvent(r.data)).catch(() => setEvent(null)),
       eventsApi.getComments(id).then(r => setComments(r.data)).catch(() => {}),
       eventsApi.getPhotos(id).then(r => setPhotos(r.data)).catch(() => {}),
     ]).finally(() => setLoading(false));
@@ -58,9 +62,12 @@ const EventDetail = () => {
         setEvent(prev => prev ? { ...prev, is_joined: false, participant_count: prev.participant_count - 1 } : prev);
         toast.success('Katılımın iptal edildi');
       } else {
-        await eventsApi.join(id!);
+        const { data } = await eventsApi.join(id!);
         setEvent(prev => prev ? { ...prev, is_joined: true, participant_count: prev.participant_count + 1 } : prev);
         toast.success('Etkinliğe kayıt oldun! Katılımını doğrulayarak 35 puan kazan. 🎯');
+        if (data.schedule_warning) {
+          toast(data.schedule_warning, { icon: '⚠️', duration: 6500 });
+        }
       }
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'İşlem başarısız');
@@ -80,6 +87,57 @@ const EventDetail = () => {
       toast.error(err.response?.data?.detail || 'Geçersiz kod');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const triggerBlobDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = async () => {
+    if (!id) return;
+    setExportingCsv(true);
+    try {
+      const { data } = await eventsApi.exportParticipantsCsv(id);
+      triggerBlobDownload(data, `katilimcilar_${id.slice(0, 8)}.csv`);
+      toast.success('CSV indirildi');
+    } catch {
+      toast.error('CSV indirilemedi (organizatör olmalısın)');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!id) return;
+    setExportingPdf(true);
+    try {
+      const { data } = await eventsApi.exportImpactPdf(id);
+      triggerBlobDownload(data, `etki_raporu_${id.slice(0, 8)}.pdf`);
+      toast.success('PDF indirildi');
+    } catch {
+      toast.error('PDF indirilemedi (organizatör olmalısın)');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const handleExportPoster = async () => {
+    if (!id) return;
+    setExportingPoster(true);
+    try {
+      const { data } = await eventsApi.downloadPoster(id);
+      triggerBlobDownload(data, `etkinlik_afisi_${id.slice(0, 8)}.png`);
+      toast.success('Afiş indirildi');
+    } catch {
+      toast.error('Afiş indirilemedi (organizatör olmalısın)');
+    } finally {
+      setExportingPoster(false);
     }
   };
 
@@ -219,7 +277,7 @@ const EventDetail = () => {
             {/* SECTION 1 — Cover */}
             <div className="relative h-72 md:h-96 rounded-card overflow-hidden bg-gradient-to-br from-primary-light to-earth-lighter">
               {event.cover_photo_url ? (
-                <img src={event.cover_photo_url} alt={event.title} className="w-full h-full object-cover" />
+                <img src={resolveMediaUrl(event.cover_photo_url) || event.cover_photo_url} alt={event.title} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-8xl">
                   {categoryEmoji[event.category]}
@@ -233,7 +291,16 @@ const EventDetail = () => {
                   {categoryEmoji[event.category]} {event.category}
                 </span>
                 <div className="flex gap-2">
-                  <button className="bg-white/90 p-2 rounded-full text-text-soft hover:text-text transition-colors" onClick={() => { navigator.clipboard.writeText(window.location.href); toast.success('Link kopyalandı'); }}>
+                  <button
+                    type="button"
+                    title="Sosyal medya önizlemesi için paylaşım linki"
+                    className="bg-white/90 p-2 rounded-full text-text-soft hover:text-text transition-colors"
+                    onClick={() => {
+                      const shareUrl = `${API_ORIGIN}/share/events/${event.id}`;
+                      void navigator.clipboard.writeText(shareUrl);
+                      toast.success('Paylaşım linki kopyalandı (WhatsApp / sosyal önizleme)');
+                    }}
+                  >
                     <Share2 size={16} />
                   </button>
                   <button className="bg-white/90 p-2 rounded-full text-text-soft hover:text-red-500 transition-colors">
@@ -259,6 +326,15 @@ const EventDetail = () => {
 
             {/* SECTION 2 — Quick info bar */}
             <div className="card">
+              <a
+                href={`${BASE_URL}/events/${event.id}/calendar.ics`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-dark mb-4"
+              >
+                <Calendar size={16} />
+                Takvime ekle (.ics)
+              </a>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 {[
                   { icon: <Calendar size={16} className="text-primary" />, label: 'Tarih', value: formatEventDate(event.event_date) },
@@ -399,6 +475,33 @@ const EventDetail = () => {
                   >
                     <span>📊</span> Analitikleri Gör
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => void handleExportCsv()}
+                    disabled={exportingCsv}
+                    className="flex items-center justify-center gap-2 p-3 bg-emerald-50 rounded-xl text-emerald-700 text-sm font-medium hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                  >
+                    {exportingCsv ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />}
+                    Katılımcı CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleExportPdf()}
+                    disabled={exportingPdf}
+                    className="flex items-center justify-center gap-2 p-3 bg-slate-50 rounded-xl text-slate-700 text-sm font-medium hover:bg-slate-100 transition-colors disabled:opacity-50"
+                  >
+                    {exportingPdf ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                    Etki PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleExportPoster()}
+                    disabled={exportingPoster}
+                    className="col-span-2 flex items-center justify-center gap-2 p-3 bg-violet-50 rounded-xl text-violet-800 text-sm font-medium hover:bg-violet-100 transition-colors disabled:opacity-50 border border-violet-100"
+                  >
+                    {exportingPoster ? <Loader2 size={15} className="animate-spin" /> : <QrCode size={15} />}
+                    Afiş indir (PNG + QR)
+                  </button>
                 </div>
               </div>
             )}

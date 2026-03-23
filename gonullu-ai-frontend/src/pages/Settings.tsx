@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, User, MapPin, BookOpen, Wrench, Camera, ArrowLeft, Upload } from 'lucide-react';
+import {
+  Save, User, MapPin, BookOpen, Wrench, Camera, ArrowLeft, Upload, Bell, Download, Calendar,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
@@ -37,6 +39,8 @@ const Settings = () => {
   const [university,  setUniversity]  = useState(user?.university_name || '');
   const [interests,   setInterests]   = useState<string[]>(user?.interests || []);
   const [skills,      setSkills]      = useState<string[]>(user?.skills || []);
+  const [emailReminders, setEmailReminders] = useState(user?.email_event_reminders !== false);
+  const [emailWeeklyDigest, setEmailWeeklyDigest] = useState(user?.email_weekly_digest === true);
   const [saving,      setSaving]      = useState(false);
   const [avatarFile,  setAvatarFile]  = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -46,6 +50,12 @@ const Settings = () => {
     if (authLoading) return;
     if (!user) navigate('/login');
   }, [user, authLoading]);
+
+  useEffect(() => {
+    if (!user) return;
+    setEmailReminders(user.email_event_reminders !== false);
+    setEmailWeeklyDigest(user.email_weekly_digest === true);
+  }, [user]);
 
   if (authLoading) return null;
   if (!user) return null;
@@ -87,6 +97,8 @@ const Settings = () => {
         university_name: isStudent ? university.trim() || null : null,
         interests,
         skills,
+        email_event_reminders: emailReminders,
+        email_weekly_digest: emailWeeklyDigest,
       });
       updateUser(data);
       toast.success('Profil güncellendi!');
@@ -207,6 +219,42 @@ const Settings = () => {
                 <p className="text-xs text-text-muted mt-1 text-right">{bio.length}/300</p>
               </div>
 
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-earth-lighter/60 border border-earth-lighter">
+                <Bell size={18} className="text-primary shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={emailReminders}
+                      onChange={e => setEmailReminders(e.target.checked)}
+                      className="rounded border-earth-light text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-text">Etkinlik hatırlatıcı e-postaları</span>
+                  </label>
+                  <p className="text-xs text-text-muted mt-1.5 pl-7">
+                    Kayıtlı olduğun etkinlikler için yaklaşık 24 saat ve 1 saat önce hatırlatma (SMTP açıksa).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-earth-lighter/60 border border-earth-lighter">
+                <Calendar size={18} className="text-primary shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={emailWeeklyDigest}
+                      onChange={e => setEmailWeeklyDigest(e.target.checked)}
+                      className="rounded border-earth-light text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-text">Haftalık özet e-postası</span>
+                  </label>
+                  <p className="text-xs text-text-muted mt-1.5 pl-7">
+                    Pazartesi sabahı (İstanbul saati) yaklaşan etkinlik özeti; SMTP ve tercih açıksa gönderilir.
+                  </p>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-semibold text-text-soft uppercase tracking-wide block mb-1.5">
                   <MapPin size={11} className="inline mr-1" />Şehir
@@ -298,6 +346,36 @@ const Settings = () => {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 shadow-card">
+            <h2 className="font-semibold text-text text-sm mb-1 flex items-center gap-2">
+              <Calendar size={15} className="text-primary" /> Takvim
+            </h2>
+            <p className="text-xs text-text-muted mb-3">
+              Onaylı kayıtlı olduğun yaklaşan etkinlikleri tek .ics dosyasında indir (Google / Apple Takvim).
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data } = await api.get<Blob>('/events/joined/calendar.ics', { responseType: 'blob' });
+                  const url = URL.createObjectURL(data);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'gonulluai-katildigim-etkinlikler.ics';
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success('Takvim dosyası indirildi');
+                } catch {
+                  toast.error('İndirilemedi — giriş yapmış olmalısın');
+                }
+              }}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border-2 border-primary/30 text-primary text-sm font-semibold hover:bg-primary-light transition-colors"
+            >
+              <Download size={16} />
+              Katıldığım etkinlikler (.ics)
+            </button>
           </div>
 
           {/* Kaydet */}

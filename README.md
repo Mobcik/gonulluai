@@ -151,11 +151,9 @@ Etkinliğe kayıt olmak puan **vermez** — fiziksel varlık doğrulanınca puan
 
 ---
 
-## Mock Modu
+## API bağlantısı
 
-Backend erişilemez olduğunda uygulama otomatik olarak **mock moda** geçer. `src/api/client.ts` içindeki Axios response interceptor, ağ hatası alındığında `src/api/mockHandlers.ts`'deki 30+ pattern tabanlı handler'a yönlendirir.
-
-Mock mod ayrı bir yapılandırma gerektirmez. Backend tekrar çalışır duruma geldiğinde 30 saniye içinde otomatik olarak gerçek API'ye geçiş yapılır.
+Frontend doğrudan **FastAPI backend** ile konuşur; yerel mock katmanı yoktur. Geliştirmede `gonullu-ai-frontend/.env` içinde `VITE_API_URL=http://localhost:8000/api` tanımlı olmalı; backend `.env` içinde `FRONTEND_URL` ve isteğe bağlı `CORS_ALLOW_ORIGINS` Vite çıkış adresinle uyumlu olmalı.
 
 ---
 
@@ -208,7 +206,8 @@ Uygulama `http://localhost:5175` adresinde açılır.
 | `DATABASE_URL` | SQLAlchemy bağlantı dizesi | `sqlite+aiosqlite:///./gonulluai.db` |
 | `SECRET_KEY` | JWT imzalama anahtarı (güçlü, rastgele) | — |
 | `GEMINI_API_KEY` | Google AI Studio API anahtarı | `AIzaSy...` |
-| `FRONTEND_URL` | CORS izin verilen origin | `http://localhost:5175` |
+| `FRONTEND_URL` | CORS (birincil origin) | `http://localhost:5175` |
+| `CORS_ALLOW_ORIGINS` | Ek origin'ler (virgülle) | `http://localhost:5173,...` |
 | `SMTP_USER` / `SMTP_PASS` | E-posta bildirimi (opsiyonel) | — |
 
 ### Frontend (`gonullu-ai-frontend/.env`)

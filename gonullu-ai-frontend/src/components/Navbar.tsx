@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, Plus, LogOut, User, Trophy, LayoutDashboard, Settings } from 'lucide-react';
+import { Menu, X, Plus, LogOut, User, Trophy, LayoutDashboard, Settings, Bell, Sparkles, PenLine } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from './common/Avatar';
 import NotificationPanel from './NotificationPanel';
@@ -23,12 +23,14 @@ const Navbar = () => {
 
   useEffect(() => { setMenuOpen(false); setProfileOpen(false); }, [location]);
 
-  const isActive = (path: string) => location.pathname.startsWith(path);
+  const isActive = (path: string) =>
+    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
   const navLinks = user
     ? [
-        { to: '/dashboard',   label: 'Ana Sayfa' },
+        { to: '/',            label: 'Ana Sayfa' },
         { to: '/discover',    label: 'Keşfet' },
+        { to: '/coach',       label: 'Mini koç' },
         { to: '/clubs',       label: 'Topluluklar' },
         { to: '/calendar',    label: 'Takvim' },
         { to: '/leaderboard', label: 'Sıralama' },
@@ -80,6 +82,18 @@ const Navbar = () => {
             {user ? (
               <>
                 <Link
+                  to="/events/organized"
+                  className={cn(
+                    'flex items-center gap-1.5 px-4 py-2 rounded-chip text-sm font-semibold border-2 transition-all duration-200',
+                    isActive('/events/organized')
+                      ? 'bg-primary-light text-primary border-primary/30'
+                      : 'text-earth border-earth-light hover:bg-earth-lighter',
+                  )}
+                >
+                  <PenLine size={15} />
+                  Etkinliklerim
+                </Link>
+                <Link
                   to="/events/new"
                   className="flex items-center gap-1.5 bg-primary text-white px-4 py-2 rounded-chip text-sm font-semibold shadow-green hover:bg-primary-dark hover:shadow-green-lg hover:-translate-y-0.5 transition-all duration-200"
                 >
@@ -107,7 +121,15 @@ const Navbar = () => {
                         <LayoutDashboard size={16} />
                         Ana Sayfam
                       </Link>
-                      <Link to={`/profile/${user.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
+                      <Link to="/events/organized" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
+                        <PenLine size={16} />
+                        Oluşturduğum etkinlikler
+                      </Link>
+                      <Link to="/notifications" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
+                        <Bell size={16} />
+                        Bildirimler
+                      </Link>
+                      <Link to="/profile" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
                         <User size={16} />
                         Profilim
                       </Link>
@@ -117,6 +139,10 @@ const Navbar = () => {
                       </Link>
                       <Link to="/rewards" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
                         🎁 <span>Ödüllerim</span>
+                      </Link>
+                      <Link to="/coach" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
+                        <Sparkles size={16} className="text-primary" />
+                        Mini koç
                       </Link>
                       <Link to="/journal" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter transition-colors text-sm text-text">
                         📖 <span>Günlüğüm</span>
@@ -184,9 +210,12 @@ const Navbar = () => {
             <hr className="border-earth-lighter my-2" />
             {user ? (
               <>
-                <Link to={`/profile/${user.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter rounded-xl text-sm text-text">
+                <Link to="/profile" className="flex items-center gap-3 px-4 py-3 hover:bg-earth-lighter rounded-xl text-sm text-text">
                   <Avatar src={user.avatar_url} name={user.full_name} size="sm" />
                   <span>{user.full_name}</span>
+                </Link>
+                <Link to="/events/organized" className="flex items-center gap-2 px-4 py-3 border-2 border-earth-light text-earth rounded-xl text-sm font-medium">
+                  <PenLine size={16} /> Etkinliklerim
                 </Link>
                 <Link to="/events/new" className="flex items-center gap-2 px-4 py-3 bg-primary-light text-primary rounded-xl text-sm font-medium">
                   <Plus size={16} /> Etkinlik Oluştur

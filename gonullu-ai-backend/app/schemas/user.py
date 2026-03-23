@@ -32,9 +32,25 @@ class UserResponse(BaseModel):
     is_student:      bool = False
     university_name: Optional[str] = None
     streak_days:     int = 0
+    email_event_reminders: bool = True
+    email_weekly_digest: bool = False
     created_at:      Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("email_event_reminders", mode="before")
+    @classmethod
+    def coerce_reminders(cls, v):
+        if v is None:
+            return True
+        return bool(v)
+
+    @field_validator("email_weekly_digest", mode="before")
+    @classmethod
+    def coerce_digest(cls, v):
+        if v is None:
+            return False
+        return bool(v)
 
     @field_validator("interests", "skills", mode="before")
     @classmethod
@@ -59,6 +75,8 @@ class UserUpdate(BaseModel):
     interests:  Optional[list[str]] = None
     skills:     Optional[list[str]] = None
     avatar_url: Optional[str] = None
+    email_event_reminders: Optional[bool] = None
+    email_weekly_digest: Optional[bool] = None
 
 
 class TokenResponse(BaseModel):

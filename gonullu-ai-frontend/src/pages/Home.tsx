@@ -167,7 +167,7 @@ const Home = () => {
               </div>
             </div>
 
-            {/* Visual card mock */}
+            {/* Örnek kart görseli */}
             <div className="relative">
               <div className="card shadow-card-hover p-8">
                 <div className="flex items-center gap-3 mb-6">
@@ -263,10 +263,11 @@ const Home = () => {
             <p className="text-text-muted text-sm text-center">
               GönüllüAI v4.0 — Gönüllülük Çalışmaları Dersi Projesi · FastAPI + React + Claude AI
             </p>
-            <div className="flex gap-6 text-sm text-text-muted">
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-text-muted">
               <Link to="/discover" className="hover:text-white transition-colors">Keşfet</Link>
               <Link to="/leaderboard" className="hover:text-white transition-colors">Sıralama</Link>
-              <Link to="/rewards" className="hover:text-white transition-colors">Ödüller</Link>
+              <Link to="/legal/terms" className="hover:text-white transition-colors">Kullanım</Link>
+              <Link to="/legal/privacy" className="hover:text-white transition-colors">Gizlilik</Link>
             </div>
           </div>
         </div>

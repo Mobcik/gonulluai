@@ -20,7 +20,7 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       toast.success('Hoş geldin! 🌿');
       navigate(from, { replace: true });
     } catch (err: any) {

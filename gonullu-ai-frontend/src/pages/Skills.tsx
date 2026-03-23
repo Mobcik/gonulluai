@@ -248,7 +248,7 @@ const Skills = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-text-soft mt-1 line-clamp-2 italic">"{reason}"</p>
+                      <p className="text-xs text-text-soft mt-1 line-clamp-4 sm:line-clamp-5 italic leading-snug">"{reason}"</p>
                       <div className="flex items-center gap-3 mt-2 flex-wrap">
                         <span className="text-[11px] text-text-muted">{ev.city} · {formatEventDate(ev.event_date)}</span>
                         {matchedInEvent.slice(0, 2).map(s => (

@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
@@ -40,10 +41,27 @@ async def create_all_tables():
     # Tüm modelleri import et (Base'e kaydettirmek için)
     from app.models import (  # noqa: F401
         User, Club, ClubMembership,
-        Event, EventParticipant, EventPhoto, EventComment,
+        Event, EventParticipant, EventPhoto, EventComment, EventReminderLog,
         DigitalReward, RewardUnlock, PointTransaction, Notification, RefreshToken,
     )
     from app.models.journal import JournalEntry  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    async def _try_alter(sql: str) -> None:
+        if not is_sqlite:
+            return
+        async with engine.begin() as conn:
+            try:
+                await conn.execute(text(sql))
+            except Exception as e:
+                err = str(e).lower()
+                if "duplicate column" not in err and "already exists" not in err:
+                    raise
+
+    await _try_alter("ALTER TABLE users ADD COLUMN email_event_reminders BOOLEAN DEFAULT 1")
+    await _try_alter("ALTER TABLE users ADD COLUMN email_weekly_digest BOOLEAN DEFAULT 0")
+    await _try_alter("ALTER TABLE users ADD COLUMN weekly_digest_sent_at TIMESTAMP")
+    await _try_alter("ALTER TABLE clubs ADD COLUMN announcement TEXT")
+
     print("[OK] Tablolar hazir.")

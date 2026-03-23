@@ -36,6 +36,9 @@ export interface User {
   university_name?: string;
   club_id?:         string;
   streak_days:      number;
+  /** Etkinlik hatırlatıcı e-postaları (24s / 1s önce). Varsayılan açık. */
+  email_event_reminders?: boolean;
+  email_weekly_digest?: boolean;
   created_at:       string;
 }
 
@@ -72,6 +75,7 @@ export interface Club {
   university:    string;
   logo_url?:     string;
   description?:  string;
+  announcement?: string | null;
   member_count:  number;
   event_count:   number;
   verified:      boolean;

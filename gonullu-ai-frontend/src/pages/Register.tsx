@@ -34,7 +34,7 @@ const Register = () => {
     if (!pwOk)    { toast.error('Şifre en az 8 karakter olmalı'); return; }
     setLoading(true);
     try {
-      await register(form.email, form.password, form.full_name, form.city || undefined);
+      await register(form.email.trim(), form.password, form.full_name, form.city || undefined);
       toast.success('Hoş geldin! 🌿 Sana özel dashboard hazır.');
       navigate('/dashboard');
     } catch (err: any) {
@@ -157,9 +157,9 @@ const Register = () => {
 
             <p className="text-xs text-text-muted">
               Kayıt olarak{' '}
-              <span className="text-primary cursor-pointer hover:underline">Kullanım Koşullarını</span>
+              <Link to="/legal/terms" className="text-primary font-medium hover:underline">Kullanım Koşullarını</Link>
               {' '}ve{' '}
-              <span className="text-primary cursor-pointer hover:underline">Gizlilik Politikasını</span>
+              <Link to="/legal/privacy" className="text-primary font-medium hover:underline">Gizlilik Politikasını</Link>
               {' '}kabul etmiş olursun.
             </p>
 

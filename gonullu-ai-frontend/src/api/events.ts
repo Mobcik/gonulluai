@@ -2,11 +2,22 @@ import api from './client';
 import type { Event, Comment, PhotoItem, VerificationMethod } from '../types';
 
 export interface EventFilters {
-  category?: string;
-  city?:     string;
-  status?:   string;
-  q?:        string;
-  page?:     number;
+  category?:   string;
+  city?:       string;
+  status?:     string;
+  q?:          string;
+  page?:       number;
+  date_from?:  string;
+  date_to?:    string;
+}
+
+export interface DiscoverParseResult {
+  city:            string | null;
+  category:        string | null;
+  q:               string | null;
+  date_from:       string | null;
+  date_to:         string | null;
+  interpretation:  string | null;
 }
 
 export interface CreateEventPayload {
@@ -36,6 +47,10 @@ export const eventsApi = {
   list: (params?: EventFilters) =>
     api.get<Event[]>('/events', { params }),
 
+  /** Sadece benim oluşturduğum etkinlikler (giriş zorunlu) */
+  listMineCreated: () =>
+    api.get<Event[]>('/events/mine/created'),
+
   get: (id: string) =>
     api.get<Event>(`/events/${id}`),
 
@@ -50,7 +65,10 @@ export const eventsApi = {
 
   /** Etkinliğe katıl — puan etkinlik günü doğrulama ile verilir */
   join: (id: string) =>
-    api.post<{ message: string }>(`/events/${id}/join`),
+    api.post<{ message: string; schedule_warning?: string }>(`/events/${id}/join`),
+
+  downloadPoster: (id: string) =>
+    api.get<Blob>(`/events/${id}/poster.png`, { responseType: 'blob' }),
 
   leave: (id: string) =>
     api.delete<{ message: string }>(`/events/${id}/join`),
@@ -87,4 +105,13 @@ export const eventsApi = {
       '/events/ai-generate-description',
       { title, category, city, extra_context },
     ),
+
+  parseDiscoverNaturalLanguage: (q: string) =>
+    api.post<DiscoverParseResult>('/events/discover/parse-natural-language', { q }),
+
+  exportParticipantsCsv: (id: string) =>
+    api.get<Blob>(`/events/${id}/participants/export.csv`, { responseType: 'blob' }),
+
+  exportImpactPdf: (id: string) =>
+    api.get<Blob>(`/events/${id}/impact-report.pdf`, { responseType: 'blob' }),
 };
