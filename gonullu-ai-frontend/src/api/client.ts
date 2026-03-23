@@ -1,21 +1,16 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { handleMockRequest } from './mockHandlers';
+import axios, { type AxiosRequestConfig } from 'axios';
 
+/** Vite: gonullu-ai-frontend/.env içinde VITE_API_URL=http://localhost:8000/api */
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
-// Backend bağlantı durumu
-let backendAvailable: boolean | null = null;
+/** Paylaşım / OG sayfası: /api olmadan kök (örn. http://localhost:8000) */
+const API_ORIGIN = BASE_URL.replace(/\/api\/?$/i, '') || 'http://localhost:8000';
 
-const checkBackend = async (): Promise<boolean> => {
-  try {
-    await axios.get(`${BASE_URL.replace('/api', '')}/health`, { timeout: 1500 });
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const api = axios.create({ baseURL: BASE_URL });
+const api = axios.create({
+  baseURL: BASE_URL,
+  timeout: 30_000,
+  headers: { 'Content-Type': 'application/json' },
+});
 
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
@@ -23,66 +18,29 @@ api.interceptors.request.use(config => {
   return config;
 });
 
-// Response interceptor — backend yoksa mock'a yönlendir
 api.interceptors.response.use(
-  (res) => res,
-  async (error) => {
-    const config = error.config as AxiosRequestConfig & { _retry?: boolean; _mockRetried?: boolean };
+  res => res,
+  async error => {
+    const config = error.config as AxiosRequestConfig & { _retry?: boolean };
 
-    // 401 → token refresh
     if (error.response?.status === 401 && !config._retry) {
       config._retry = true;
       const refresh = localStorage.getItem('refresh_token');
       if (refresh) {
         try {
-          const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh });
+          const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refresh }, { timeout: 15_000 });
           localStorage.setItem('token', data.access_token);
-          if (config.headers) config.headers['Authorization'] = `Bearer ${data.access_token}`;
+          if (config.headers) config.headers.Authorization = `Bearer ${data.access_token}`;
           return api(config);
         } catch {
-          localStorage.clear();
+          localStorage.removeItem('token');
+          localStorage.removeItem('refresh_token');
           window.location.href = '/login';
         }
       } else {
-        localStorage.clear();
+        localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
         window.location.href = '/login';
-      }
-    }
-
-    // Ağ hatası → mock API devreye gir
-    if (!error.response && !config._mockRetried) {
-      config._mockRetried = true;
-
-      // İlk kez kontrol et
-      if (backendAvailable === null) {
-        backendAvailable = await checkBackend();
-      }
-
-      if (!backendAvailable) {
-        // 30 saniye sonra tekrar backend'i kontrol et (recovery)
-        setTimeout(() => { backendAvailable = null; }, 30_000);
-
-        const url    = (config.url || '').replace(BASE_URL, '');
-        const method = config.method || 'get';
-        let   body   = config.data;
-
-        // FormData → parse etme (dosya yüklemede)
-        if (body && typeof body === 'string') {
-          try { body = JSON.parse(body); } catch { body = {}; }
-        }
-
-        try {
-          const mockResult = await handleMockRequest(url, method, body);
-          return {
-            data:    mockResult,
-            status:  200,
-            headers: {},
-            config,
-          } as AxiosResponse;
-        } catch (mockError: any) {
-          if (mockError?.response) throw mockError;
-          throw error;
-        }
       }
     }
 
@@ -91,7 +49,4 @@ api.interceptors.response.use(
 );
 
 export default api;
-
-// Mock modunu zorla aç (backend yokken test için)
-export const forceMockMode = () => { backendAvailable = false; };
-export const resetMockMode = () => { backendAvailable = null; };
+export { BASE_URL, API_ORIGIN };

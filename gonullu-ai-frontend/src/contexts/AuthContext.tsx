@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { authApi } from '../api/auth';
-import { MOCK_STORAGE_KEYS } from '../api/mockHandlers';
 import type { User } from '../types';
 
 interface AuthContextType {
@@ -48,8 +47,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     authApi.logout().catch(() => {});
     localStorage.removeItem('token');
     localStorage.removeItem('refresh_token');
-    localStorage.removeItem(MOCK_STORAGE_KEYS.currentUser);
-    localStorage.removeItem(MOCK_STORAGE_KEYS.joinedEvents);
     setUser(null);
   };
 

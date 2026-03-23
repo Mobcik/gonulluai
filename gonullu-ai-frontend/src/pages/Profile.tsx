@@ -13,7 +13,6 @@ import EventCard from '../components/events/EventCard';
 import { badgeInfo, formatPoints, nextBadgeThreshold } from '../utils/formatPoints';
 import { formatRelative, formatEventDate } from '../utils/formatDate';
 import { cn } from '../utils/cn';
-import { MOCK_USERS, MOCK_POINT_HISTORY, getUserEvents } from '../api/mockData';
 import { rewardsApi } from '../api/rewards';
 
 const TABS = ['Aktif Etkinlikler', 'Geçmiş Etkinlikler', 'Oluşturduklarım', 'Puan Geçmişi'];
@@ -48,16 +47,24 @@ const Profile = () => {
     const userId = id || me?.id;
     if (!userId) { setLoading(false); return; }
 
-    const fallbackUser = MOCK_USERS.find(u => u.id === userId) || me || MOCK_USERS[0];
-    const fallbackPts  = MOCK_POINT_HISTORY.filter(p => p.user_id === userId || p.user_id === 'u-demo');
-    const fallbackEvts = getUserEvents(userId);
-
+    setLoading(true);
     Promise.all([
-      api.get<User>(`/users/${userId}`).then(r => setProfile(r.data)).catch(() => setProfile(fallbackUser)),
-      api.get<Event[]>(`/users/${userId}/events`).then(r => setEvents(r.data)).catch(() => setEvents(fallbackEvts)),
-      api.get<PointTransaction[]>(`/users/${userId}/points`).then(r => setPoints(r.data)).catch(() => setPoints(fallbackPts)),
-    ]).finally(() => setLoading(false));
-  }, [id, me]);
+      api.get<User>(`/users/${userId}`),
+      api.get<Event[]>(`/users/${userId}/events`),
+      api.get<PointTransaction[]>(`/users/${userId}/points`),
+    ])
+      .then(([uRes, eRes, pRes]) => {
+        setProfile(uRes.data);
+        setEvents(eRes.data);
+        setPoints(pRes.data);
+      })
+      .catch(() => {
+        setProfile(null);
+        setEvents([]);
+        setPoints([]);
+      })
+      .finally(() => setLoading(false));
+  }, [id, me?.id]);
 
   if (loading) {
     return (
@@ -67,7 +74,20 @@ const Profile = () => {
     );
   }
 
-  const user           = profile || MOCK_USERS[0];
+  const user = profile ?? (isOwn ? me : null);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen pt-24 pb-16 flex flex-col items-center justify-center gap-4 px-4">
+        <div className="text-5xl">😔</div>
+        <h2 className="font-semibold text-xl text-text">Profil bulunamadı</h2>
+        <p className="text-sm text-text-muted text-center max-w-md">
+          Kullanıcı yüklenemedi veya sunucuya bağlanılamıyor. Backend&apos;in ayakta olduğundan emin ol.
+        </p>
+        <Link to="/discover" className="btn-primary">Keşfet</Link>
+      </div>
+    );
+  }
   const nextThreshold  = nextBadgeThreshold[user.badge as keyof typeof nextBadgeThreshold];
   const pct            = nextThreshold ? Math.round((user.earned_points / nextThreshold) * 100) : 100;
   const badgeMeta      = badgeInfo[user.badge as keyof typeof badgeInfo];

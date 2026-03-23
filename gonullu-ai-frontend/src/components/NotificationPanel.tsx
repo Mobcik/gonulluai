@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Bell, CheckCheck, X } from 'lucide-react';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
@@ -137,7 +138,7 @@ const NotificationPanel = () => {
               </div>
             ) : (
               <div>
-                {notifs.map((n, idx) => (
+                {notifs.map(n => (
                   <button
                     key={n.id}
                     onClick={() => markRead(n.id)}
@@ -155,7 +156,9 @@ const NotificationPanel = () => {
                     <div className="flex-1 min-w-0">
                       <p className={cn(
                         'text-xs leading-relaxed',
-                        !n.is_read ? 'font-semibold text-text' : 'text-text-soft'
+                        !n.is_read
+                          ? 'font-semibold text-text'
+                          : 'text-text-soft'
                       )}>
                         {n.message}
                       </p>
@@ -177,8 +180,15 @@ const NotificationPanel = () => {
           {/* Alt footer */}
           {notifs.length > 0 && (
             <div className="px-4 py-2.5 border-t border-earth-lighter bg-earth-lighter/30">
-              <p className="text-[10px] text-text-muted text-center">
-                Son {notifs.length} bildirim gösteriliyor
+              <Link
+                to="/notifications"
+                className="block text-center text-[11px] font-semibold text-primary hover:underline"
+                onClick={() => setOpen(false)}
+              >
+                Tüm bildirimler →
+              </Link>
+              <p className="text-[10px] text-text-muted text-center mt-1">
+                Son {notifs.length} bildirim
               </p>
             </div>
           )}

@@ -241,7 +241,7 @@ const EventCreate = () => {
                   type="text" maxLength={80}
                   value={form.title}
                   onChange={e => upd('title', e.target.value)}
-                  placeholder="Örn: Belgrad Ormanı Ağaç Dikme Etkinliği"
+                  placeholder="Örn: Selçukta İftar Çadırı Kurmak"
                   className="input"
                 />
               </div>

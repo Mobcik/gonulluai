@@ -17,6 +17,22 @@ async def list_clubs(db: AsyncSession = Depends(get_db)):
     return [await enrich_club(db, c) for c in clubs]
 
 
+@router.get("/me/memberships")
+async def my_club_memberships(
+    user: User       = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Üyenin katıldığı kulüpler (sosyal / topluluk özeti için)."""
+    result = await db.execute(
+        select(Club)
+        .join(ClubMembership, ClubMembership.club_id == Club.id)
+        .where(ClubMembership.user_id == user.id)
+        .order_by(Club.name.asc())
+    )
+    clubs = result.scalars().all()
+    return [await enrich_club(db, c) for c in clubs]
+
+
 @router.post("/")
 async def create_club(
     data: dict,
@@ -36,6 +52,30 @@ async def create_club(
     db.add(club)
     await db.commit()
     return {"id": str(club.id), "message": "Kulüp oluşturuldu, admin onayı bekleniyor"}
+
+
+@router.put("/{club_id}")
+async def update_club(
+    club_id: str,
+    data: dict,
+    user: User       = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    club = await db.get(Club, club_id)
+    if not club:
+        raise HTTPException(404, "Kulüp bulunamadı")
+    if str(club.organizer_id) != str(user.id) and not user.is_admin:
+        raise HTTPException(403, "Sadece kulüp organizatörü düzenleyebilir")
+    if "announcement" in data:
+        ann = data.get("announcement")
+        club.announcement = (str(ann).strip() or None) if ann is not None else None
+    if "description" in data:
+        club.description = data.get("description")
+    if data.get("name"):
+        club.name = str(data["name"]).strip()[:100]
+    await db.commit()
+    await db.refresh(club)
+    return await enrich_club(db, club)
 
 
 @router.get("/{club_id}")
@@ -88,6 +128,7 @@ async def enrich_club(db: AsyncSession, club: Club) -> dict:
         "university":   club.university,
         "logo_url":     club.logo_url,
         "description":  club.description,
+        "announcement": getattr(club, "announcement", None),
         "member_count": member_count,
         "event_count":  event_count,
         "verified":     club.verified,

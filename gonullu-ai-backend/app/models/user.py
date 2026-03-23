@@ -27,4 +27,7 @@ class User(Base):
     last_login       = Column(TIMESTAMP, nullable=True)
     is_active        = Column(Boolean, default=True)
     is_admin         = Column(Boolean, default=False)
+    email_event_reminders = Column(Boolean, default=True, server_default="1", nullable=False)
+    email_weekly_digest   = Column(Boolean, default=False, server_default="0", nullable=False)
+    weekly_digest_sent_at = Column(TIMESTAMP, nullable=True)
     created_at       = Column(TIMESTAMP, server_default=func.now())

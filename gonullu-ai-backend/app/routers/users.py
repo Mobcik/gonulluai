@@ -2,7 +2,7 @@ import json
 import os
 import uuid
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
@@ -11,8 +11,14 @@ from app.models.event import Event, EventParticipant
 from app.models.reward import PointTransaction, Notification
 from app.schemas.user import UserResponse, UserUpdate
 from app.dependencies import get_current_user
+from app.services.graphics_service import build_impact_badge_png
 
 router = APIRouter(tags=["users"])
+
+_BADGE_TR = {
+    "filiz": "Filiz", "genc": "Genç", "aktif": "Aktif", "deneyimli": "Deneyimli",
+    "lider": "Lider", "efsane": "Efsane",
+}
 
 POINT_REASON_LABELS = {
     "profile_complete":    "Profil tamamlama bonusu",
@@ -79,6 +85,30 @@ async def upload_avatar(
     await db.refresh(user)
 
     return {"avatar_url": avatar_url}
+
+
+@router.get("/me/impact-badge.png")
+async def me_impact_badge(
+    user: User       = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    jc = (
+        await db.execute(
+            select(func.count()).where(EventParticipant.user_id == user.id)
+        )
+    ).scalar() or 0
+    bl = _BADGE_TR.get(getattr(user, "badge", "") or "", user.badge or "rozet")
+    png = build_impact_badge_png(
+        user.full_name or "",
+        int(user.total_points or 0),
+        int(jc),
+        bl,
+    )
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Content-Disposition": 'attachment; filename="gonulluai-etki-rozeti.png"'},
+    )
 
 
 @router.get("/{user_id}", response_model=UserResponse)

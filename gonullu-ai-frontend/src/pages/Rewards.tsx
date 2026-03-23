@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Download, Lock, CheckCircle } from 'lucide-react';
 import { rewardsApi } from '../api/rewards';
 import type { DigitalReward } from '../types';
@@ -7,25 +7,37 @@ import Button from '../components/common/Button';
 import { formatPoints, badgeInfo } from '../utils/formatPoints';
 import { cn } from '../utils/cn';
 import toast from 'react-hot-toast';
-import { MOCK_REWARDS } from '../api/mockData';
+import ApiErrorState from '../components/common/ApiErrorState';
 
 const Rewards = () => {
   const { user } = useAuth();
-  const [rewards,   setRewards]   = useState<DigitalReward[]>(MOCK_REWARDS);
+  const [rewards,   setRewards]   = useState<DigitalReward[]>([]);
   const [unlocked,  setUnlocked]  = useState<string[]>([]);
   const [certLoading, setCertLoading] = useState(false);
+  const [rewardsError, setRewardsError] = useState(false);
 
-  useEffect(() => {
-    rewardsApi.list().then(r => setRewards(r.data)).catch(() => {});
+  const loadRewards = useCallback(async () => {
+    setRewardsError(false);
+    try {
+      const { data } = await rewardsApi.list();
+      setRewards(data);
+    } catch {
+      setRewards([]);
+      setRewardsError(true);
+    }
     if (user) {
-      rewardsApi.myUnlocks().then(r => setUnlocked(r.data.map(d => d.id))).catch(() => {
-        if (user) {
-          const pts = user.earned_points;
-          setUnlocked(MOCK_REWARDS.filter(r => pts >= r.threshold).map(r => r.id));
-        }
-      });
+      try {
+        const { data } = await rewardsApi.myUnlocks();
+        setUnlocked(data.map(d => d.id));
+      } catch {
+        setUnlocked([]);
+      }
+    } else {
+      setUnlocked([]);
     }
   }, [user]);
+
+  useEffect(() => { loadRewards(); }, [loadRewards]);
 
   const handleDownloadCert = async () => {
     if (!user || user.earned_points < 500) {
@@ -81,13 +93,21 @@ const Rewards = () => {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-10">
+        {rewardsError && (
+          <div className="mb-8">
+            <ApiErrorState title="Ödül listesi yüklenemedi" onRetry={loadRewards} className="max-w-lg mx-auto" />
+          </div>
+        )}
+
         {/* Progress bar to next reward */}
-        {user && (() => {
-          const next = MOCK_REWARDS.find(r => pts < r.threshold);
+        {user && rewards.length > 0 && (() => {
+          const sorted = [...rewards].sort((a, b) => a.threshold - b.threshold);
+          const next = sorted.find(r => pts < r.threshold);
           if (!next) return null;
-          const prev = MOCK_REWARDS.findLast(r => pts >= r.threshold);
-          const from = prev?.threshold || 0;
-          const pct  = Math.round(((pts - from) / (next.threshold - from)) * 100);
+          const earned = sorted.filter(r => pts >= r.threshold);
+          const prev = earned.length ? earned[earned.length - 1] : undefined;
+          const from = prev?.threshold ?? 0;
+          const pct  = Math.min(100, Math.round(((pts - from) / (next.threshold - from)) * 100));
           return (
             <div className="card mb-8">
               <div className="flex items-center justify-between mb-2">
@@ -107,6 +127,11 @@ const Rewards = () => {
 
         {/* Reward grid */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {!rewardsError && rewards.length === 0 && (
+            <p className="col-span-full text-center text-sm text-text-muted py-8">
+              Ödül tanımları yüklenemedi veya henüz liste boş.
+            </p>
+          )}
           {rewards.map(reward => {
             const isUnlocked = !user ? false : pts >= reward.threshold;
             const isOwned    = unlocked.includes(reward.id);

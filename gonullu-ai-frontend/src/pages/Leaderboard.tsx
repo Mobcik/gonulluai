@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Trophy, Medal, Flame } from 'lucide-react';
 import { leaderboardApi } from '../api/rewards';
 import type { LeaderboardEntry } from '../types';
@@ -6,9 +6,8 @@ import { badgeInfo, formatPoints } from '../utils/formatPoints';
 import { useAuth } from '../contexts/AuthContext';
 import Avatar from '../components/common/Avatar';
 import Chip from '../components/common/Chip';
+import ApiErrorState from '../components/common/ApiErrorState';
 import { cn } from '../utils/cn';
-import { MOCK_LEADERBOARD } from '../api/mockData';
-
 const PERIODS     = ['Bu Hafta', 'Bu Ay', 'Tüm Zamanlar'];
 const PERIOD_KEYS = ['week', 'month', 'all'] as const;
 const CITIES      = ['Tüm Şehirler', 'İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya'];
@@ -24,19 +23,26 @@ const Leaderboard = () => {
   const { user }  = useAuth();
   const [period,  setPeriod]  = useState(0);
   const [city,    setCity]    = useState('Tüm Şehirler');
-  const [entries, setEntries] = useState<LeaderboardEntry[]>(MOCK_LEADERBOARD);
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  const loadLeaderboard = useCallback(() => {
     setLoading(true);
+    setLoadError(false);
     leaderboardApi.get({
       period: PERIOD_KEYS[period],
       city: city !== 'Tüm Şehirler' ? city : undefined,
     })
       .then(r => setEntries(r.data))
-      .catch(() => setEntries(MOCK_LEADERBOARD))
+      .catch(() => {
+        setEntries([]);
+        setLoadError(true);
+      })
       .finally(() => setLoading(false));
   }, [period, city]);
+
+  useEffect(() => { loadLeaderboard(); }, [loadLeaderboard]);
 
   const top3    = entries.slice(0, 3);
   const rest    = entries.slice(3);
@@ -91,6 +97,12 @@ const Leaderboard = () => {
               </div>
             ))}
           </div>
+        ) : loadError ? (
+          <ApiErrorState title="Sıralama yüklenemedi" onRetry={loadLeaderboard} className="max-w-lg mx-auto" />
+        ) : entries.length === 0 ? (
+          <p className="text-center text-text-muted py-16 text-sm">
+            Bu dönem için henüz sıralama verisi yok. Etkinliklere katılarak puanda yer alabilirsin.
+          </p>
         ) : (
           <>
             {/* TOP 3 podium */}
@@ -100,7 +112,7 @@ const Leaderboard = () => {
                 <Avatar src={top3[1]?.user.avatar_url} name={top3[1]?.user.full_name || ''} size="lg" />
                 <div className="text-center">
                   <Medal size={20} className="text-gray-400 mx-auto mb-1" />
-                  <p className="font-semibold text-sm text-text">{top3[1]?.user.full_name.split(' ')[0]}</p>
+                  <p className="font-semibold text-sm text-text">{top3[1]?.user?.full_name?.split(' ')[0]}</p>
                   <p className="text-xs text-text-muted font-medium">{formatPoints(top3[1]?.total_points || 0)} puan</p>
                 </div>
                 <div className="w-full bg-gray-200 rounded-t-xl h-16 flex items-center justify-center text-2xl font-bold text-gray-500">2</div>
@@ -114,7 +126,7 @@ const Leaderboard = () => {
                 </div>
                 <div className="text-center">
                   <Trophy size={20} className="text-yellow-500 mx-auto mb-1" />
-                  <p className="font-bold text-sm text-text">{top3[0]?.user.full_name.split(' ')[0]}</p>
+                  <p className="font-bold text-sm text-text">{top3[0]?.user?.full_name?.split(' ')[0]}</p>
                   <p className="text-xs text-primary font-bold">{formatPoints(top3[0]?.total_points || 0)} puan</p>
                 </div>
                 <div className="w-full bg-yellow-400 rounded-t-xl h-24 flex items-center justify-center text-3xl font-bold text-white">1</div>
@@ -125,7 +137,7 @@ const Leaderboard = () => {
                 <Avatar src={top3[2]?.user.avatar_url} name={top3[2]?.user.full_name || ''} size="lg" />
                 <div className="text-center">
                   <Medal size={20} className="text-amber-600 mx-auto mb-1" />
-                  <p className="font-semibold text-sm text-text">{top3[2]?.user.full_name.split(' ')[0]}</p>
+                  <p className="font-semibold text-sm text-text">{top3[2]?.user?.full_name?.split(' ')[0]}</p>
                   <p className="text-xs text-text-muted font-medium">{formatPoints(top3[2]?.total_points || 0)} puan</p>
                 </div>
                 <div className="w-full bg-amber-400 rounded-t-xl h-10 flex items-center justify-center text-xl font-bold text-white">3</div>

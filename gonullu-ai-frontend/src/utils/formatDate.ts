@@ -1,4 +1,12 @@
-import { format, formatDistanceToNow, isToday, isTomorrow, differenceInDays } from 'date-fns';
+import {
+  format,
+  formatDistanceToNow,
+  isToday,
+  isTomorrow,
+  differenceInDays,
+  intervalToDuration,
+  isBefore,
+} from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 export const formatEventDate = (dateStr: string): string => {
@@ -19,3 +27,20 @@ export const daysUntilEvent = (dateStr: string): number => {
 export const formatShortDate = (dateStr: string): string => {
   return format(new Date(dateStr), 'd MMM', { locale: tr });
 };
+
+/** Yaklaşan etkinlik için geri sayım parçaları (şu an → etkinlik tarihi) */
+export function countdownToEvent(
+  eventDateStr: string,
+  now = new Date()
+): { ended: true } | { ended: false; days: number; hours: number; minutes: number; seconds: number } {
+  const end = new Date(eventDateStr);
+  if (isBefore(end, now)) return { ended: true };
+  const d = intervalToDuration({ start: now, end });
+  return {
+    ended: false,
+    days: d.days ?? 0,
+    hours: d.hours ?? 0,
+    minutes: d.minutes ?? 0,
+    seconds: d.seconds ?? 0,
+  };
+}

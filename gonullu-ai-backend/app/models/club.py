@@ -12,6 +12,7 @@ class Club(Base):
     university   = Column(String(200), nullable=False)
     logo_url     = Column(Text)
     description  = Column(Text)
+    announcement = Column(Text, nullable=True)
     organizer_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     verified     = Column(Boolean, default=False)
     created_at   = Column(TIMESTAMP, server_default=func.now())

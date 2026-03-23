@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   TreePine, BookOpen, Heart, Clock, Recycle,
   Users, Calendar, MapPin, Share2, Download,
   TrendingUp, Globe, Camera,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import { badgeInfo, categoryEmoji } from '../utils/formatPoints';
 import { cn } from '../utils/cn';
+import ApiErrorState from '../components/common/ApiErrorState';
 
 interface PlatformImpact {
   total_events:        number;
@@ -62,19 +64,35 @@ const Impact = () => {
   const [platform, setPlatform]       = useState<PlatformImpact | null>(null);
   const [myImpact, setMyImpact]       = useState<UserImpact | null>(null);
   const [loading, setLoading]         = useState(true);
+  const [loadError, setLoadError]     = useState(false);
   const [cardVisible, setCardVisible] = useState(false);
+  const [badgeDownloading, setBadgeDownloading] = useState(false);
   const cardRef                       = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const req: Promise<any>[] = [api.get<PlatformImpact>('/analytics/impact')];
-    if (user) req.push(api.get<UserImpact>(`/analytics/impact/user/${user.id}`));
-
-    Promise.allSettled(req).then(([pRes, uRes]) => {
-      if (pRes.status === 'fulfilled') setPlatform(pRes.value.data);
-      if (uRes && uRes.status === 'fulfilled') setMyImpact((uRes as any).value.data);
-    }).finally(() => setLoading(false));
+  const loadImpact = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const { data } = await api.get<PlatformImpact>('/analytics/impact');
+      setPlatform(data);
+    } catch {
+      setPlatform(null);
+      setLoadError(true);
+    }
+    if (user) {
+      try {
+        const { data } = await api.get<UserImpact>(`/analytics/impact/user/${user.id}`);
+        setMyImpact(data);
+      } catch {
+        setMyImpact(null);
+      }
+    } else {
+      setMyImpact(null);
+    }
+    setLoading(false);
   }, [user]);
+
+  useEffect(() => { loadImpact(); }, [loadImpact]);
 
   const shareCard = async () => {
     const text = myImpact
@@ -85,7 +103,25 @@ const Impact = () => {
       await navigator.share({ title: 'Etki Kartım', text, url: window.location.origin }).catch(() => {});
     } else {
       await navigator.clipboard.writeText(text);
-      alert('Metin panoya kopyalandı!');
+      toast.success('Metin panoya kopyalandı');
+    }
+  };
+
+  const downloadImpactBadge = async () => {
+    setBadgeDownloading(true);
+    try {
+      const { data } = await api.get<Blob>('/users/me/impact-badge.png', { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'gonullu-etki-rozeti.png';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Rozet PNG indirildi');
+    } catch {
+      toast.error('Rozet indirilemedi — giriş yapmış olmalısın');
+    } finally {
+      setBadgeDownloading(false);
     }
   };
 
@@ -111,6 +147,10 @@ const Impact = () => {
             Gönüllülerin birlikte yarattığı somut değişim
           </p>
         </div>
+
+        {loadError && (
+          <ApiErrorState title="Etki verileri yüklenemedi" onRetry={loadImpact} className="max-w-lg mx-auto" />
+        )}
 
         {/* ── PLATFORM ETKİSİ ─────────────────────────────── */}
         {platform && (
@@ -185,14 +225,26 @@ const Impact = () => {
         {/* ── KİŞİSEL ETKİ KARTI ──────────────────────────── */}
         {user && myImpact && (
           <div>
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
               <h2 className="font-semibold text-xl text-text">Benim Etkisi</h2>
-              <button
-                onClick={shareCard}
-                className="flex items-center gap-2 bg-white shadow-card px-4 py-2.5 rounded-xl text-sm font-semibold text-text hover:shadow-card-hover transition-all"
-              >
-                <Share2 size={15} className="text-primary" /> Paylaş
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void downloadImpactBadge()}
+                  disabled={badgeDownloading}
+                  className="flex items-center gap-2 bg-white shadow-card px-4 py-2.5 rounded-xl text-sm font-semibold text-text hover:shadow-card-hover transition-all disabled:opacity-60"
+                >
+                  <Download size={15} className="text-primary" />
+                  {badgeDownloading ? 'İndiriliyor…' : 'Rozet PNG'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void shareCard()}
+                  className="flex items-center gap-2 bg-white shadow-card px-4 py-2.5 rounded-xl text-sm font-semibold text-text hover:shadow-card-hover transition-all"
+                >
+                  <Share2 size={15} className="text-primary" /> Paylaş
+                </button>
+              </div>
             </div>
 
             {/* Paylaşılabilir kart */}

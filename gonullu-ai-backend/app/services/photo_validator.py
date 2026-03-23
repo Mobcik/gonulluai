@@ -1,7 +1,14 @@
-import httpx
 import base64
 import json
-from app.config import settings
+import httpx
+
+from app.services.ai_service import (
+    GEMINI_BASE,
+    _MODELS,
+    _extract_json,
+    _gemini_key,
+    _gemini_response_text,
+)
 
 VALIDATION_PROMPT = """
 Bu fotoğraf bir gönüllülük etkinliğine uygun mu?
@@ -15,28 +22,46 @@ SADECE JSON döndür: {"valid": true/false, "confidence": 0-100, "reason": "..."
 
 
 async def validate_event_photo(image_bytes: bytes) -> dict:
-    if not settings.GEMINI_API_KEY:
+    key = _gemini_key()
+    if not key:
         return {"valid": True, "confidence": 100, "reason": "API anahtarı yok, doğrulama atlandı"}
 
     b64 = base64.b64encode(image_bytes).decode()
+    mime = (
+        "image/png"
+        if len(image_bytes) >= 8 and image_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+        else "image/jpeg"
+    )
 
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}",
-                json={
-                    "contents": [{
-                        "parts": [
-                            {"inline_data": {"mime_type": "image/jpeg", "data": b64}},
-                            {"text": VALIDATION_PROMPT},
-                        ]
-                    }]
-                },
-            )
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"inlineData": {"mimeType": mime, "data": b64}},
+                    {"text": VALIDATION_PROMPT},
+                ]
+            }
+        ]
+    }
 
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        text = text.strip().strip("```json").strip("```").strip()
-        return json.loads(text)
-    except Exception as e:
-        return {"valid": True, "confidence": 70, "reason": f"Doğrulama servisi geçici olarak kullanılamıyor: {str(e)}"}
+    last_err: Exception | None = None
+    async with httpx.AsyncClient(timeout=22) as client:
+        for model in _MODELS:
+            url = f"{GEMINI_BASE}{model}:generateContent"
+            try:
+                resp = await client.post(url, params={"key": key}, json=payload)
+                resp.raise_for_status()
+                text = _gemini_response_text(resp.json())
+                parsed = json.loads(_extract_json(text))
+                if isinstance(parsed, dict) and "valid" in parsed:
+                    return parsed
+                last_err = ValueError("Geçersiz JSON şekli")
+            except Exception as e:
+                last_err = e
+                continue
+
+    return {
+        "valid": True,
+        "confidence": 60,
+        "reason": f"Görsel doğrulama servisi yanıt vermedi; yükleme kabul edildi ({last_err!s})",
+    }

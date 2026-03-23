@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { Search, SlidersHorizontal, Sparkles, X, MapPin, Tag } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Search, SlidersHorizontal, Sparkles, X, MapPin, Tag, Loader2, Wand2, CalendarRange } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useDiscoverEvents } from '../hooks/useDiscoverEvents';
 import EventCard from '../components/events/EventCard';
 import Chip from '../components/common/Chip';
+import ApiErrorState from '../components/common/ApiErrorState';
 import { categoryEmoji } from '../utils/formatPoints';
 import { cn } from '../utils/cn';
 
@@ -21,14 +24,30 @@ const CITIES = [
 const Discover = () => {
   const { user } = useAuth();
   const [showFilters, setShowFilters] = useState(false);
+  const [searchParams] = useSearchParams();
 
   const {
-    displayed, loading, welcomeMsg,
-    search, selectedCat, selectedCity, useAI,
-    activeFilterCount,
-    setSearch, setSelectedCat, setSelectedCity, setUseAI,
+    displayed, loading, loadError, welcomeMsg,
+    search, selectedCat, selectedCity, dateFrom, dateTo, nlInterpretation,
+    useAI, activeFilterCount, nlParsing,
+    page, totalCount, pageSize, hasPrev, hasNext, setPage,
+    setSearch, setSelectedCat, setSelectedCity, setDateFrom, setDateTo, setUseAI,
     clearAll,
+    refetch,
+    applyNaturalLanguage,
   } = useDiscoverEvents({ user });
+
+  const [nlQuery, setNlQuery] = useState('');
+
+  const handleClearAll = () => {
+    clearAll();
+    setNlQuery('');
+  };
+
+  useEffect(() => {
+    const cat = searchParams.get('category');
+    if (cat && CATEGORIES.includes(cat)) setSelectedCat(cat);
+  }, [searchParams, setSelectedCat]);
 
   return (
     <div className="min-h-screen pt-20 pb-16">
@@ -49,7 +68,9 @@ const Discover = () => {
               <p className="text-text-soft mt-1">
                 {loading
                   ? 'Yükleniyor…'
-                  : `${displayed.length} etkinlik`
+                  : totalCount > 0
+                    ? `Bu sayfada ${displayed.length} · Toplam ${totalCount} etkinlik`
+                    : `${displayed.length} etkinlik`
                 }
                 {selectedCat  && <span className="ml-2 text-primary font-medium">· {selectedCat}</span>}
                 {selectedCity && <span className="ml-1 text-earth font-medium">· {selectedCity}</span>}
@@ -113,16 +134,81 @@ const Discover = () => {
               )}
             </button>
 
-            {(activeFilterCount > 0 || search) && (
+            {(activeFilterCount > 0 || search || nlQuery) && (
               <button
                 type="button"
-                onClick={clearAll}
+                onClick={handleClearAll}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl border-[1.5px] border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-all"
               >
                 <X size={15} />
                 <span className="hidden sm:inline">Temizle</span>
               </button>
             )}
+          </div>
+
+          {/* ── Doğal dil + tarih ───────────────────────────────────────── */}
+          <div className="mt-4 space-y-3">
+            <div className="p-4 bg-white/80 backdrop-blur-sm rounded-2xl border border-earth-lighter">
+              <p className="text-xs font-semibold text-text-soft uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Wand2 size={12} /> Doğal dil ile ara
+              </p>
+              <p className="text-xs text-text-muted mb-2">
+                Örn. yarın İstanbul çevre etkinliği — şehir, kategori ve tarih filtreleri doldurulur.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={nlQuery}
+                  onChange={e => setNlQuery(e.target.value)}
+                  placeholder="Ne arıyorsun?"
+                  className="input flex-1"
+                  disabled={nlParsing}
+                />
+                <button
+                  type="button"
+                  disabled={nlParsing || !nlQuery.trim()}
+                  onClick={async () => {
+                    try {
+                      await applyNaturalLanguage(nlQuery);
+                      toast.success('Filtreler güncellendi');
+                    } catch {
+                      toast.error('Ayrıştırma başarısız');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold shadow-green hover:bg-primary-dark disabled:opacity-40"
+                >
+                  {nlParsing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                  Uygula
+                </button>
+              </div>
+              {nlInterpretation && (
+                <p className="text-xs text-primary mt-2 font-medium">{nlInterpretation}</p>
+              )}
+            </div>
+
+            <div className="p-4 bg-white/70 backdrop-blur-sm rounded-2xl border border-earth-lighter flex flex-wrap gap-4 items-end">
+              <p className="text-xs font-semibold text-text-soft uppercase tracking-wide w-full flex items-center gap-1.5 mb-0">
+                <CalendarRange size={12} /> Tarih aralığı
+              </p>
+              <label className="flex flex-col gap-1 text-xs text-text-muted">
+                Başlangıç
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="input text-sm py-2"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-text-muted">
+                Bitiş
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="input text-sm py-2"
+                />
+              </label>
+            </div>
           </div>
 
           {/* ── Kategori Chip'leri ──────────────────────────────────────── */}
@@ -175,6 +261,12 @@ const Discover = () => {
               </div>
             ))}
           </div>
+        ) : loadError && displayed.length === 0 ? (
+          <ApiErrorState
+            title="Etkinlikler yüklenemedi"
+            onRetry={refetch}
+            className="max-w-lg mx-auto"
+          />
         ) : displayed.length === 0 ? (
           <div className="text-center py-20">
             <div className="text-5xl mb-4">🔍</div>
@@ -182,7 +274,7 @@ const Discover = () => {
             <p className="text-text-muted mb-6">
               {search ? `"${search}" için sonuç bulunamadı` : 'Seçili filtrelerle eşleşen etkinlik yok'}
             </p>
-            <button onClick={clearAll} className="btn-primary px-8">Filtreleri Temizle</button>
+            <button type="button" onClick={handleClearAll} className="btn-primary px-8">Filtreleri Temizle</button>
           </div>
         ) : (
           <>
@@ -209,6 +301,18 @@ const Discover = () => {
                     <button onClick={() => setSelectedCity('')} className="ml-1 hover:text-red-500"><X size={10} /></button>
                   </span>
                 )}
+                {dateFrom && (
+                  <span className="flex items-center gap-1 text-xs bg-earth-lighter text-text px-2.5 py-1 rounded-chip font-medium">
+                    <CalendarRange size={10} /> {dateFrom}
+                    <button type="button" onClick={() => setDateFrom('')} className="ml-1 hover:text-red-500"><X size={10} /></button>
+                  </span>
+                )}
+                {dateTo && (
+                  <span className="flex items-center gap-1 text-xs bg-earth-lighter text-text px-2.5 py-1 rounded-chip font-medium">
+                    → {dateTo}
+                    <button type="button" onClick={() => setDateTo('')} className="ml-1 hover:text-red-500"><X size={10} /></button>
+                  </span>
+                )}
               </div>
             )}
 
@@ -222,6 +326,30 @@ const Discover = () => {
                 />
               ))}
             </div>
+
+            {totalCount > pageSize && (
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10 pb-4">
+                <button
+                  type="button"
+                  disabled={!hasPrev || loading}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  className="px-5 py-2.5 rounded-xl border border-earth-light text-sm font-semibold text-text hover:bg-earth-lighter disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Önceki
+                </button>
+                <span className="text-sm text-text-muted">
+                  Sayfa {page} · {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalCount)} / {totalCount}
+                </span>
+                <button
+                  type="button"
+                  disabled={!hasNext || loading}
+                  onClick={() => setPage(p => p + 1)}
+                  className="px-5 py-2.5 rounded-xl border border-earth-light text-sm font-semibold text-text hover:bg-earth-lighter disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Sonraki
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

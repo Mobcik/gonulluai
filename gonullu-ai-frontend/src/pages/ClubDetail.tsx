@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   Users, CalendarDays, ShieldCheck, ArrowLeft, Building2,
   UserPlus, CheckCircle, CalendarRange, Clock, TrendingUp,
-  Heart, Zap, Star, MapPin,
+  Heart, Zap, Star, MapPin, Megaphone, Pencil, Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { clubsApi } from '../api/clubs';
@@ -91,6 +91,9 @@ const ClubDetail = () => {
   const [joined,    setJoined]    = useState(false);
   const [imgErr,    setImgErr]    = useState(false);
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [wallEditing, setWallEditing] = useState(false);
+  const [wallText, setWallText] = useState('');
+  const [wallSaving, setWallSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -109,6 +112,30 @@ const ClubDetail = () => {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    if (!club) return;
+    setWallText(club.announcement ?? '');
+    setWallEditing(false);
+  }, [club?.id, club?.announcement]);
+
+  const handleSaveWall = async () => {
+    if (!id || !club) return;
+    setWallSaving(true);
+    try {
+      const trimmed = wallText.trim();
+      const { data } = await clubsApi.update(id, {
+        announcement: trimmed.length ? trimmed : null,
+      });
+      setClub(data);
+      setWallEditing(false);
+      toast.success('Topluluk duvarı güncellendi');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Kaydedilemedi');
+    } finally {
+      setWallSaving(false);
+    }
+  };
 
   const handleJoin = async () => {
     if (!user) { navigate('/login'); return; }
@@ -145,6 +172,7 @@ const ClubDetail = () => {
 
   // Etkinlik kategorilerini çıkar
   const categories = [...new Set(events.map(e => e.category).filter(Boolean))].slice(0, 4);
+  const isOrganizer = user?.id === club.organizer_id;
 
   return (
     <div className="min-h-screen pt-16 pb-20 bg-earth-lighter/40">
@@ -274,6 +302,67 @@ const ClubDetail = () => {
 
           {/* ── Sol: Etkinlikler ──────────────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
+
+            <div className="bg-white rounded-2xl shadow-card p-5 border-l-4 border-primary">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <h3 className="font-semibold text-text text-sm flex items-center gap-2">
+                  <Megaphone size={16} className="text-primary shrink-0" />
+                  Topluluk duvarı
+                </h3>
+                {isOrganizer && !wallEditing && (
+                  <button
+                    type="button"
+                    onClick={() => setWallEditing(true)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark"
+                  >
+                    <Pencil size={13} />
+                    Düzenle
+                  </button>
+                )}
+              </div>
+              {wallEditing ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={wallText}
+                    onChange={e => setWallText(e.target.value)}
+                    rows={4}
+                    maxLength={2000}
+                    placeholder="Duyuru, çağrı veya kulüp haberini buraya yaz..."
+                    className="input w-full text-sm resize-y min-h-[100px]"
+                  />
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <button
+                      type="button"
+                      disabled={wallSaving}
+                      onClick={() => {
+                        setWallText(club.announcement ?? '');
+                        setWallEditing(false);
+                      }}
+                      className="px-4 py-2 rounded-xl text-sm font-medium text-text-soft hover:bg-earth-lighter"
+                    >
+                      İptal
+                    </button>
+                    <button
+                      type="button"
+                      disabled={wallSaving}
+                      onClick={() => void handleSaveWall()}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-primary-dark disabled:opacity-60 flex items-center gap-2"
+                    >
+                      {wallSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                      Kaydet
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-text-soft leading-relaxed whitespace-pre-wrap">
+                  {(club.announcement?.trim())
+                    ? club.announcement
+                    : (isOrganizer
+                      ? 'Henüz duvar mesajı yok. Üyelere duyuru paylaşmak için Düzenle’ye tıkla.'
+                      : 'Bu topluluğun henüz duvar mesajı yok.')}
+                </p>
+              )}
+            </div>
 
             {/* Tab başlıkları */}
             <div className="bg-white rounded-2xl shadow-card overflow-hidden">
